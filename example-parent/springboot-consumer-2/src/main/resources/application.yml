@@ -1,0 +1,27 @@
+# DataSource Config
+
+spring:
+  datasource:
+    ems:
+      url: jdbc:mysql://localhost:3306/ems
+      username: root
+      password: Cc123456_
+      driverClassName: com.mysql.cj.jdbc.Driver
+      druid:
+        max-active: 300
+    url: jdbc:mysql://localhost:3306/ems_test
+    username: root
+    password: Cc123456_
+    driverClassName: com.mysql.cj.jdbc.Driver
+    druid:
+      max-active: 300
+
+
+
+ems:
+  enabled: true
+  redisson:
+    url: redis://localhost:6379
+
+server:
+  port: 8081

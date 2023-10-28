@@ -50,7 +50,7 @@ ems:
 
 #### 执行 Sql Init -->> [init.sql](init.sql)
 
-
+![](doc/test.png)
 
 
 #### Producer: 参见 [springboot-producer-1](example-parent%2Fspringboot-producer-1)

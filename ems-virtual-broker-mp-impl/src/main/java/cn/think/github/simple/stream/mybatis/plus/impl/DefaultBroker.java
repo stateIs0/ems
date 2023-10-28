@@ -31,7 +31,6 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.stream.Collectors;
 
-@SuppressWarnings("unchecked")
 @Slf4j
 @Service
 public class DefaultBroker implements Broker {
@@ -162,13 +161,13 @@ public class DefaultBroker implements Broker {
             log.warn(e.getMessage(), e);
             return new ArrayList<>();
         }
-        List<SimpleMsg> simpleMsgs = new ArrayList<>();
+        List<SimpleMsg> msgArrayList = new ArrayList<>();
         if (offsetPair != null) {
-            simpleMsgs = msgService.getBatch(topicName, offsetPair.min, offsetPair.max);
+            msgArrayList = msgService.getBatch(topicName, offsetPair.min, offsetPair.max);
         }
         List<SimpleMsgWrapper> retryMsgList = retryMsgHandler.getRetryMsgList(topicName, group);
 
-        if (simpleMsgs.isEmpty() && retryMsgList.isEmpty()) {
+        if (msgArrayList.isEmpty() && retryMsgList.isEmpty()) {
             if (!streamAdmin.existTopic(topicName)) {
                 throw new RuntimeException("topicName 错误 " + topicName);
             } else {
@@ -190,7 +189,7 @@ public class DefaultBroker implements Broker {
                         .tags(simpleMsg.getSimpleMsg().getTags())
                         .build())).collect(Collectors.toList());
 
-        collect.addAll(simpleMsgs.stream().map(simpleMsg -> (Msg.builder()
+        collect.addAll(msgArrayList.stream().map(simpleMsg -> (Msg.builder()
                 .body(simpleMsg.getJsonBody())
                 .offset(simpleMsg.getPhysicsOffset())
                 .msgId(String.valueOf(simpleMsg.getPhysicsOffset()))

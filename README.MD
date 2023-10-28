@@ -2,12 +2,20 @@
 
 Extension MySQL Stream； 扩展 MySQL 队列.
 
-一种基于 MySQL 实现的 stream 队列.
+为了减轻某些小型应用的搭建成本, 实现一种基于 MySQL 实现的 stream 队列. 
 
 
 ## springboot 2.x 接入
 
-maven:
+环境准备:
+1. mysql 8.x version
+2. redis x version
+3. JDK8
+4. maven
+
+
+
+#### Maven:
 
 ```xml
 <dependency>
@@ -17,7 +25,35 @@ maven:
 </dependency>
 ```
 
-Producer:
+#### SpringBoot 配置, 包含  ems  数据库配置, redis 配置等
+```yml
+spring:
+  datasource:
+    ems:
+      url: jdbc:mysql://localhost:3306/ems
+      username: root
+      password: {}
+      driverClassName: com.mysql.cj.jdbc.Driver
+      druid:
+        max-active: 300
+    url: jdbc:mysql://localhost:3306/ems_test
+    username: root
+    password: {}
+    driverClassName: com.mysql.cj.jdbc.Driver
+    druid:
+      max-active: 300
+ems:
+  enabled: true
+  redisson:
+    url: redis://localhost:6379
+```
+
+#### 执行 Sql Init -->> [init.sql](init.sql)
+
+
+
+
+#### Producer: 参见 [springboot-producer-1](example-parent%2Fspringboot-producer-1)
 
 ```text
 SimpleProducer producer = new SimpleProducerImpl();
@@ -26,7 +62,7 @@ SendResult sendResult = producer.send(Msg.builder().topic("TopicA").body("hello-
 System.out.println(sendResult.getMsgId());
 ```
 
-Consumer:
+#### Consumer: 参见 [springboot-consumer-1](example-parent%2Fspringboot-consumer-1)
 
 ```text
 SimpleConsumer consumer = new SimpleConsumerImpl(group, topic, 20, GroupType.CLUSTER);
@@ -46,8 +82,6 @@ consumer.start();
 3. 快速重置消息位点，快速回放消息,快速查询消息
 4. 消息可基于磁盘积压、消息可快速清理
 5. 监控 group 积压，topic 消息量排行，消息链路追踪，消息消费超时告警；
-6. 读写性能 1200-3000 QPS 左右
-7. send qps 100, consumer qps 150, mysql 2700w 行, 机器负载无变化, 无慢 sql;
 
 ## 写入设计
 
@@ -61,21 +95,23 @@ msg id 就是 topic 维度的自增 id，可对多个 topic 并发写入
     - topic 维度的自增 id 如果使用 mysql 实现， 性能不堪受辱，因此，此处使用 redis 自增实现（可配置为 mysql 实现）；
     - 经过测试，笔记本电脑，单 topic 20 并发写入，qps 在 1000-1500 左右（local mysql & local redis），基本满足业务需求。
     - 考虑到高可用性和业务场景，此处无法使用批量插入
-- 所有的 topic 和 msg 都写入的这一张表中，表数据定时清理，消费完的消息，可提前删除。
+- 所有的 topic 和 msg 都写入的这一张表中，表数据使用 quartz 定时凌晨清理，消费完的消息，可提前删除。
+- 写入流程如下图: 
+
+![](doc/send.png)
 
 ## 读取设计
 
 1. 假设针对一个 topic，只有一个 consumer，只需循环读取，然后更新 offset 即可。
     1. 但结合实际业务场景，这种基本不存在，所以，忽略这种场景。
     2. 通常，一个 topic 有多个 consumer group（简称 tg）， 一个 consumer group 有多个 client（jvm or thread）
-2. 如果一个 topic + group（简称 tg），有多个 consumer，每个 consumer 有多个线程，读取和更新 offset 则会有并发问题, 如下图。
+2. 如果一个 topic + group（简称 tg），有多个 consumer，每个 consumer 有多个线程，读取和更新 offset 则会有并发问题.
 
-- 这个 client id，我们将其设计为，ip + pid + uuid + thread id；
+- 这个 client id，我们将其设计为，ip + pid + uuid；
     - ip 和 pid 可帮助我们追溯问题
     - uuid 简单防重复
-    - thread id，一种性能优化，下面细说。
 - 结合实际业务场景，且遵循 simple is better 原则，读取时，使用上锁的方式解决并发问题。锁的粒度就是 tg
-- 考虑到要实现基本的顺序读取和防止重复消费，多线程并发时，我们应当实现基于自增的形式读取 msg；每个 clientid
+- 考虑到要实现基本的顺序读取和防止重复消费，多线程并发时，我们应当实现基于自增的形式读取 msg；每个 client id
   读取消息后，都会记录一个简单的log，并在 tg 维度增加一个 max offset
 - 每次读取消息时，每个 client 都需要去检查当前想要读取的 tg 是否已经有【其他 client】在操作 max offset。即，我们将锁的粒度缩小到了
   max offset；
@@ -89,7 +125,7 @@ msg id 就是 topic 维度的自增 id，可对多个 topic 并发写入
         - 拉取刚刚读取的 msg id list 里面的消息体
         - 交给业务处理消息
 
-![](doc/img.png)
+![](doc/pull.png)
 
 3. ack
     1. 对于集群消息，如何保证在断电情况下，消息不丢失,使用数据库存储消息, 写入即不会丢失, 但消费时,
@@ -113,7 +149,7 @@ msg id 就是 topic 维度的自增 id，可对多个 topic 并发写入
 
 5. client id
     1. 只有 consumer 需要 client id
-    2. client id 由 ip pid uuid + thread id 组成, 可溯源.
+    2. client id 由 ip pid uuid 组成
     3. client id 需要续约（5s），如果机器宕机，则会被自动清除，且他的 start 状态的消息会进入重试队列，交给同 group 的其他
        client
     4. client id 可以自己主动注销，注销前，自己内存的消息应当被优雅消费结束，一般来讲，kill -15 的 jvm 都会主动注销 client
@@ -121,7 +157,7 @@ msg id 就是 topic 维度的自增 id，可对多个 topic 并发写入
 
 ## 核心表设计
 
-1. topic 表：记录topic 元信息
+1. topic 表：记录 topic 元信息
 2. group 表：记录 group 订阅元信息
 3. msg 表：msg总表，记录写入的信息，包含 body 和 topic 维度的自增 offset，类似 rocketmq commit log
     1. 该表会被多个 consumer 消费的消息
@@ -295,7 +331,7 @@ shell 逻辑
 
 ## 参数
 
-ems 参数控制在数据库 simple_stream_system_config 表和 cn.think.github.simple.stream.api.EmsSystemConfig 接口中,
+ems 参数控制在数据库 ems_simple_stream_system_config 表和 cn.think.github.simple.stream.api.EmsSystemConfig 接口中,
 支持以下配置:
 
 1. autoCreateTopic
@@ -306,24 +342,31 @@ ems 参数控制在数据库 simple_stream_system_config 表和 cn.think.github.
 2. msgMaxSizeInBytes
 
 - 消息最大长度
-- 默认 4MB
+- 默认 4MB (4210688)
 
 3. consumerBatchSize
 
 - consumer 一次批量拉去的消息数
-- 默认 250
+- 默认 10
 
-4. consumerThreads-{group}
+4. consumerThreads
 
 - 指定 consumer 并发线程数
 - 默认 5
 
-5. consumerRetryMaxTimes-{group}
+5. consumerRetryMaxTimes
 
 - 指定 consumer 重试次数
-- 默认 16
+- 默认 15
 
-6. consumerRetryMaxTimesDefault
 
-- consumer 默认重试次数
-- 默认 16
+## 性能测试记录
+
+- 4c 16g  CPU MHz:               2095.078
+- mysql + redis + jvm*5(2p+3c) (100 qps 指的是 1kb 消息体每秒发送 100 次, 另读取的 qps 为 150, 总 qps 为 250)
+1. qps 5:  cpu 8%~13%
+2. qps 10: 10% - 15%
+3. qps 50: 22% - 30%
+4. qps 100: 22% - 30%
+5. qps 200: 29% - 36%
+6. qps 400: 36% - 55% (%idle 33.71)

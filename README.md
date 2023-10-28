@@ -2,12 +2,20 @@
 
 Extension MySQL Stream； 扩展 MySQL 队列.
 
-一种基于 MySQL 实现的 stream 队列.
+为了减轻某些小型应用的搭建成本, 实现一种基于 MySQL 实现的 stream 队列. 
 
 
 ## springboot 2.x 接入
 
-Maven:
+环境准备:
+1. mysql 8.x version
+2. redis x version
+3. JDK8
+4. maven
+
+
+
+#### Maven:
 
 ```xml
 <dependency>
@@ -17,7 +25,7 @@ Maven:
 </dependency>
 ```
 
-SpringBoot 配置, 包含  ems  数据库配置, redis 配置等
+#### SpringBoot 配置, 包含  ems  数据库配置, redis 配置等
 ```yml
 spring:
   datasource:
@@ -40,9 +48,12 @@ ems:
     url: redis://localhost:6379
 ```
 
+#### 执行 Sql Init -->> [init.sql](init.sql)
 
 
-Producer:
+
+
+#### Producer: 参见 [springboot-producer-1](example-parent%2Fspringboot-producer-1)
 
 ```text
 SimpleProducer producer = new SimpleProducerImpl();
@@ -51,7 +62,7 @@ SendResult sendResult = producer.send(Msg.builder().topic("TopicA").body("hello-
 System.out.println(sendResult.getMsgId());
 ```
 
-Consumer:
+#### Consumer: 参见 [springboot-consumer-1](example-parent%2Fspringboot-consumer-1)
 
 ```text
 SimpleConsumer consumer = new SimpleConsumerImpl(group, topic, 20, GroupType.CLUSTER);
@@ -71,8 +82,6 @@ consumer.start();
 3. 快速重置消息位点，快速回放消息,快速查询消息
 4. 消息可基于磁盘积压、消息可快速清理
 5. 监控 group 积压，topic 消息量排行，消息链路追踪，消息消费超时告警；
-6. 读写性能 1200-3000 QPS 左右
-7. send qps 100, consumer qps 150, mysql 2700w 行, 机器负载无变化, 无慢 sql;
 
 ## 写入设计
 
@@ -140,7 +149,7 @@ msg id 就是 topic 维度的自增 id，可对多个 topic 并发写入
 
 5. client id
     1. 只有 consumer 需要 client id
-    2. client id 由 ip pid uuid + thread id 组成, 可溯源.
+    2. client id 由 ip pid uuid 组成
     3. client id 需要续约（5s），如果机器宕机，则会被自动清除，且他的 start 状态的消息会进入重试队列，交给同 group 的其他
        client
     4. client id 可以自己主动注销，注销前，自己内存的消息应当被优雅消费结束，一般来讲，kill -15 的 jvm 都会主动注销 client

@@ -12,10 +12,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -54,7 +51,7 @@ public class BroadcastConsumerRunner implements Runnable {
 
         this.workerPool = new ThreadPoolExecutor(threadNum, threadNum, 60, TimeUnit.SECONDS,
                 //16, 设置的小一点
-                new LinkedBlockingQueue<>(16), new NamedThreadFactory(consumerClient.topicName + "$" + consumerClient.groupName),
+                new SynchronousQueue<>(), new NamedThreadFactory(consumerClient.topicName + "$" + consumerClient.groupName),
                 // 在当前线程执行
                 new ThreadPoolExecutor.CallerRunsPolicy());
 

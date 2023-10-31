@@ -43,6 +43,8 @@ public class ClusterConsumerRunner implements Runnable {
                 new SynchronousQueue<>(),
                 new NamedThreadFactory(consumerClient.topicName + "$" + consumerClient.groupName),
                 new ThreadPoolExecutor.AbortPolicy());
+        // 不用的时候, 关闭核心线程, 节约资源
+        this.workerPool.allowCoreThreadTimeOut(true);
     }
 
     @Override

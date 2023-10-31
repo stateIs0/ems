@@ -35,8 +35,12 @@ public class ClusterConsumerRunner implements Runnable {
         this.consumerClient = consumerClient;
         this.clientIdId = clientIdId;
         this.threadNum = threadNum;
-        this.workerPool = new ThreadPoolExecutor(0, consumerClient.threadNum
-                , 60, TimeUnit.SECONDS, new SynchronousQueue<>(),
+        this.workerPool = new ThreadPoolExecutor(
+                0,
+                consumerClient.threadNum,
+                60,
+                TimeUnit.SECONDS,
+                new SynchronousQueue<>(),
                 new NamedThreadFactory(consumerClient.topicName + "$" + consumerClient.groupName),
                 new ThreadPoolExecutor.AbortPolicy());
     }
@@ -44,30 +48,35 @@ public class ClusterConsumerRunner implements Runnable {
     @Override
     public void run() {
         while (consumerClient.running) {
-            try {
-                // 循环读取消息
-                List<Msg> msgList = new ArrayList<>();
-                try {
-                    msgList = consumerClient.broker.get().pullMsg(consumerClient.topicName, consumerClient.groupName, clientIdId, 30);
-                } catch (LockFailException e) {
-                    // ignore
-                    log.warn("fail get lock {} {} {}", consumerClient.topicName, consumerClient.groupName, consumerClient.clientId);
-                }
-                if (CollectionUtils.isEmpty(msgList)) {
-                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(new Random().nextInt(200)));
-                    continue;
-                }
-
-                List<Msg> finalMsgList = msgList;
-                while (workerPool.getActiveCount() == threadNum) {
-                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
-                }
-                workerPool.execute(() -> consumer(finalMsgList));
-            } catch (Throwable e) {
-                log.error(e.getMessage(), e);
-            }
+            processMsg();
         }
+        workerPool.shutdownNow();
         log.info("{} 消费者 [{}] 线程优雅停止..... {}", consumerClient.groupName, threadNum, consumerClient.topicName);
+    }
+
+    private void processMsg() {
+        try {
+            // 循环读取消息
+            List<Msg> msgList = new ArrayList<>();
+            try {
+                msgList = consumerClient.broker.get().pullMsg(consumerClient.topicName, consumerClient.groupName, clientIdId, 30);
+            } catch (LockFailException e) {
+                // ignore
+                log.warn("fail get lock {} {} {}", consumerClient.topicName, consumerClient.groupName, consumerClient.clientId);
+            }
+            if (CollectionUtils.isEmpty(msgList)) {
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(new Random().nextInt(200)));
+                return;
+            }
+
+            List<Msg> finalMsgList = msgList;
+            while (workerPool.getActiveCount() == threadNum) {
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+            }
+            workerPool.execute(() -> consumer(finalMsgList));
+        } catch (Throwable e) {
+            log.error(e.getMessage(), e);
+        }
     }
 
     private void consumer(List<Msg> finalMsgList) {

@@ -122,12 +122,10 @@ public class RetryMsgHandlerTask implements LifeCycle {
                     }
                     return null;
                 }, getClass().getName(), 10);
+            } catch (LockFailException ignore) {
+                log.warn(ignore.getMessage());
             } catch (Throwable e) {
-                if (e instanceof LockFailException) {
-                    // ignore
-                } else {
-                    log.warn(e.getMessage(), e);
-                }
+                log.warn(e.getMessage(), e);
             }
         }, 1000, 500, TimeUnit.MILLISECONDS);
     }

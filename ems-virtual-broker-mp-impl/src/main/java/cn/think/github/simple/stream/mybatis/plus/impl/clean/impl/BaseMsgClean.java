@@ -19,8 +19,6 @@ import javax.annotation.Resource;
 @Slf4j
 public abstract class BaseMsgClean implements LifeCycle, Job {
 
-    protected static final String CORN = "0 0/1 * * * ?";
-
     @Resource
     protected Broker broker;
     @Resource

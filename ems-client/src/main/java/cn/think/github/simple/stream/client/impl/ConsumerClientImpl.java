@@ -5,9 +5,7 @@ import cn.think.github.simple.stream.api.simple.util.IPv4AddressUtil;
 import cn.think.github.simple.stream.api.simple.util.PIDUtil;
 import cn.think.github.simple.stream.api.simple.util.TopicConstant;
 import cn.think.github.simple.stream.api.spi.Broker;
-import cn.think.github.simple.stream.api.spi.LockFailException;
 import cn.think.github.simple.stream.client.VirtualBrokerFactory;
-import cn.think.github.simple.stream.client.support.CollectionUtils;
 import cn.think.github.simple.stream.client.support.ConsumerClient;
 import cn.think.github.spi.factory.NamedThreadFactory;
 import cn.think.github.spi.factory.SpiFactory;
@@ -16,12 +14,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 
 /**
@@ -47,9 +41,9 @@ public class ConsumerClientImpl implements ConsumerClient {
 
     SimpleListener bizListener;
 
-    private int threadNum;
+    int threadNum;
 
-    private ThreadPoolExecutor mainWorker;
+    ThreadPoolExecutor mainWorker;
 
     Supplier<Broker> broker;
 
@@ -124,20 +118,16 @@ public class ConsumerClientImpl implements ConsumerClient {
             threadNum = systemConfigSupplier.get().consumerThreads();
         }
 
-        mainWorker = new ThreadPoolExecutor(threadNum, threadNum, keepAliveTime, TimeUnit.SECONDS,
+        mainWorker = new ThreadPoolExecutor(1, 1, keepAliveTime, TimeUnit.SECONDS,
                 new SynchronousQueue<>(), new MainWorkerThreadFactory(topicName, groupName));
 
         this.clientId = IPv4AddressUtil.get() + "@" + PIDUtil.get() + "@" + UUID.randomUUID().toString().replace("-", "");
 
         if (groupType == GroupType.BROADCASTING) {
             log.info("广播 group {}, this.clientId = {} ", groupName, clientId);
-            mainWorker.setCorePoolSize(1);
             mainWorker.execute(new BroadcastConsumerRunner(this, threadNum));
         } else {
-            mainWorker.setCorePoolSize(threadNum);
-            for (int i = 0; i < threadNum; i++) {
-                mainWorker.execute(new ClusterModeRunner(clientId, i));
-            }
+            mainWorker.execute(new ClusterConsumerRunner(this, clientId, threadNum));
         }
 
         log.info("{} start consumer {} {}, thread {}", clientId, groupName, topicName, threadNum);
@@ -153,69 +143,6 @@ public class ConsumerClientImpl implements ConsumerClient {
             RENEW.remove(renew_runnable);
             broker.get().down(clientId);
             log.warn("stop consumer {} {}", groupName, topicName);
-        }
-    }
-
-    class ClusterModeRunner implements Runnable {
-
-        String clientIdId;
-
-        int threadSeq;
-
-        public ClusterModeRunner(String clientIdId, int threadSeq) {
-            this.clientIdId = clientIdId;
-            this.threadSeq = threadSeq;
-        }
-
-        @Override
-        public void run() {
-            while (running) {
-                try {
-                    // 循环读取消息
-                    List<Msg> msgList = new ArrayList<>();
-                    try {
-                        msgList = broker.get().pullMsg(topicName, groupName, clientIdId, 30);
-                    } catch (LockFailException e) {
-                        // ignore
-                        log.warn("fail get lock {} {} {}", topicName, groupName, clientId);
-                    }
-                    if (CollectionUtils.isEmpty(msgList)) {
-                        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(new Random().nextInt(200)));
-                        continue;
-                    }
-
-                    List<Msg> ack = new ArrayList<>();
-                    for (Msg m : msgList) {
-                        try {
-                            List<Msg> w = new ArrayList<>();
-                            w.add(m);
-                            ConsumerResult consumer = bizListener.consumer(w);
-                            if (consumer == null) {
-                                throw new RuntimeException("消费者不能返回 null");
-                            }
-                            m.setReceiveLater(consumer.isReceiveLater());
-                        } catch (OutOfMemoryError error) {
-                            // oom 了 todo 特殊处理
-                            log.error(error.getMessage(), error);
-                            m.setReceiveLater(true);
-                        } catch (Throwable t) {
-                            // catch 业务异常, 并进行记录.
-                            log.error(t.getMessage(), t);
-                            m.setReceiveLater(true);
-                        } finally {
-                            ack.add(m);
-                        }
-                    }
-                    if (broker.get().ack(ack, groupName, clientIdId, 30)) {
-                        // success, ignore
-                        continue;
-                    }
-                    log.error("ack fail, msg = {}", msgList);
-                } catch (Throwable e) {
-                    log.error(e.getMessage(), e);
-                }
-            }
-            log.info("{} 消费者 [{}] 线程优雅停止..... {}", groupName, threadSeq, topicName);
         }
     }
 

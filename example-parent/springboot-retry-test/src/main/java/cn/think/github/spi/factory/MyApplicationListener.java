@@ -62,7 +62,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         SimpleProducer producer = new SimpleProducerImpl();
         producer.start();
 
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 1000; i++) {
             SendResult send = producer.send(Msg.builder().topic(topic).body("hello-world ")
                     .properties(new Properties())
                     .tags("aaa tag")
@@ -71,7 +71,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         }
 
 
-        SimpleConsumer consumer = new SimpleConsumerImpl(group, topic, 2, GroupType.CLUSTER);
+        SimpleConsumer consumer = new SimpleConsumerImpl(group, topic, 5, GroupType.CLUSTER);
 
         final Long[] preTime = {0L};
         AtomicLong atomicLong = new AtomicLong(0);
@@ -84,7 +84,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
 
             try {
                 log.info("retry --------->>> {} {} {}", atomicLong.incrementAndGet(), TimeUnit.MILLISECONDS.toSeconds(l), m.getConsumerTimes());
-//                Thread.sleep(10000);
+                Thread.sleep(100);
             } catch (Throwable ignore) {
                 try {
                     Thread.sleep(10000);

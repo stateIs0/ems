@@ -122,40 +122,8 @@ public class DefaultBroker implements Broker {
 
         OffsetPair offsetPair;
         try {
-            offsetPair = (streamLock.lockAndExecute(() -> {
-                // topic max
-                Long max = msgService.getMsgMaxOffset(topicName);
-                // group max
-                Long offsetMax = logService.getMaxLogOffset(topicName, group);
-                if (offsetMax >= max) {
-                    return null;
-                }
-
-                long newOffset = 0L;
-                long tmp;
-                tmp = offsetMax + 1;
-                List<TopicGroupLog> list = new ArrayList<>();
-                int batchSize = emsSystemConfig.consumerBatchSize();
-                for (int i = 0; i < (max - offsetMax > batchSize ? batchSize : max - offsetMax); i++) {
-                    newOffset = offsetMax + 1;
-                    offsetMax = newOffset;
-                    TopicGroupLog db = new TopicGroupLog();
-                    db.setGroupName(group);
-                    db.setTopicName(topicName);
-                    db.setState(TopicGroupLog.STATE_START);
-                    db.setPhysicsOffset(newOffset);
-                    db.setClientId(clientId);
-                    db.setCreateTime(new Date());
-                    db.setUpdateTime(new Date());
-                    list.add(db);
-                }
-
-                logService.saveBatch(list);
-                logService.setMaxLogOffset(topicName, group, newOffset);
-                return new OffsetPair(tmp, newOffset);
-            }, lockKey, timeoutInSec));
+            offsetPair = (streamLock.lockAndExecute(() -> insertMsgLog(topicName, group, clientId), lockKey, timeoutInSec));
         } catch (LockFailException ignore) {
-            // ignore
             return new ArrayList<>();
         } catch (Throwable e) {
             log.warn(e.getMessage(), e);
@@ -168,39 +136,12 @@ public class DefaultBroker implements Broker {
         List<SimpleMsgWrapper> retryMsgList = retryMsgHandler.getRetryMsgList(topicName, group);
 
         if (msgArrayList.isEmpty() && retryMsgList.isEmpty()) {
-            if (!streamAdmin.existTopic(topicName)) {
-                throw new RuntimeException("topicName 错误 " + topicName);
-            } else {
-                log.debug("0--->> {} {} {}", topicName, group, offsetPair);
-                return new ArrayList<>();
-            }
+            return new ArrayList<>();
         }
-        List<Msg> collect = retryMsgList.stream()
-                .filter(Objects::nonNull)
-                .filter(a -> a.getSimpleMsg() != null)
-                .map(simpleMsg -> (Msg.builder()
-                        .body(simpleMsg.getSimpleMsg().getJsonBody())
-                        .offset(simpleMsg.getSimpleMsg().getPhysicsOffset())
-                        .msgId(String.valueOf(simpleMsg.getSimpleMsg().getPhysicsOffset()))
-                        .topic(simpleMsg.getSimpleMsg().getTopicName())
-                        .realTopic(simpleMsg.getRealTopic())
-                        .consumerTimes(simpleMsg.getConsumerTimes())
-                        .properties(load(simpleMsg.getSimpleMsg().getProperties()))
-                        .tags(simpleMsg.getSimpleMsg().getTags())
-                        .build())).collect(Collectors.toList());
 
-        collect.addAll(msgArrayList.stream().map(simpleMsg -> (Msg.builder()
-                .body(simpleMsg.getJsonBody())
-                .offset(simpleMsg.getPhysicsOffset())
-                .msgId(String.valueOf(simpleMsg.getPhysicsOffset()))
-                .topic(simpleMsg.getTopicName())
-                .realTopic(simpleMsg.getTopicName())
-                .properties(load(simpleMsg.getProperties()))
-                .tags(simpleMsg.getTags())
-                .build())).collect(Collectors.toList()));
-
-        return collect;
+        return filterMsgList(retryMsgList, msgArrayList);
     }
+
 
     @Override
     public boolean ack(List<Msg> list, String group, String clientId, int timeoutInSec) {
@@ -262,7 +203,7 @@ public class DefaultBroker implements Broker {
         lifeCycles.forEach(LifeCycle::stop);
     }
 
-    public Properties load(String propertiesString) {
+    private Properties load(String propertiesString) {
         if (propertiesString == null) {
             return new Properties();
         }
@@ -273,6 +214,66 @@ public class DefaultBroker implements Broker {
             throw new RuntimeException(e);
         }
         return properties;
+    }
+
+    private List<Msg> filterMsgList(List<SimpleMsgWrapper> retryMsgList, List<SimpleMsg> msgArrayList) {
+        List<Msg> collect = retryMsgList.stream()
+                .filter(Objects::nonNull)
+                .filter(a -> a.getSimpleMsg() != null)
+                .map(simpleMsg -> (Msg.builder()
+                        .body(simpleMsg.getSimpleMsg().getJsonBody())
+                        .offset(simpleMsg.getSimpleMsg().getPhysicsOffset())
+                        .msgId(String.valueOf(simpleMsg.getSimpleMsg().getPhysicsOffset()))
+                        .topic(simpleMsg.getSimpleMsg().getTopicName())
+                        .realTopic(simpleMsg.getRealTopic())
+                        .consumerTimes(simpleMsg.getConsumerTimes())
+                        .properties(load(simpleMsg.getSimpleMsg().getProperties()))
+                        .tags(simpleMsg.getSimpleMsg().getTags())
+                        .build())).collect(Collectors.toList());
+
+        collect.addAll(msgArrayList.stream().map(simpleMsg -> (Msg.builder()
+                .body(simpleMsg.getJsonBody())
+                .offset(simpleMsg.getPhysicsOffset())
+                .msgId(String.valueOf(simpleMsg.getPhysicsOffset()))
+                .topic(simpleMsg.getTopicName())
+                .realTopic(simpleMsg.getTopicName())
+                .properties(load(simpleMsg.getProperties()))
+                .tags(simpleMsg.getTags())
+                .build())).collect(Collectors.toList()));
+        return collect;
+    }
+
+    private OffsetPair insertMsgLog(String topicName, String group, String clientId) {
+        // topic max
+        Long max = msgService.getMsgMaxOffset(topicName);
+        // group max
+        Long offsetMax = logService.getMaxLogOffset(topicName, group);
+        if (offsetMax >= max) {
+            return null;
+        }
+
+        long newOffset = 0L;
+        long tmp;
+        tmp = offsetMax + 1;
+        List<TopicGroupLog> list = new ArrayList<>();
+        int batchSize = emsSystemConfig.consumerBatchSize();
+        for (int i = 0; i < (max - offsetMax > batchSize ? batchSize : max - offsetMax); i++) {
+            newOffset = offsetMax + 1;
+            offsetMax = newOffset;
+            TopicGroupLog db = new TopicGroupLog();
+            db.setGroupName(group);
+            db.setTopicName(topicName);
+            db.setState(TopicGroupLog.STATE_START);
+            db.setPhysicsOffset(newOffset);
+            db.setClientId(clientId);
+            db.setCreateTime(new Date());
+            db.setUpdateTime(new Date());
+            list.add(db);
+        }
+
+        logService.saveBatch(list);
+        logService.setMaxLogOffset(topicName, group, newOffset);
+        return new OffsetPair(tmp, newOffset);
     }
 
     @Data

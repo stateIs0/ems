@@ -32,10 +32,12 @@ current=$(date +%s)
 # 检查系统类型
 if [ "$os_type" == "Linux" ]; then
     echo "This is Linux."
+    cd /root/ems
 elif [ "$os_type" == "Darwin" ]; then
     echo "This is macOS."
     cd ~/ty60/ems
 else
+    cd /root/ems
     echo "Unsupported operating system."
 fi
 

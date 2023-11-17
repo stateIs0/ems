@@ -52,7 +52,9 @@ public class Main {
                 checkResult();
             }
         }).start();
-        auto_kill_recover();
+        if (System.getProperty("autoKill") != null) {
+            auto_kill_recover();
+        }
         LockSupport.park();
     }
 

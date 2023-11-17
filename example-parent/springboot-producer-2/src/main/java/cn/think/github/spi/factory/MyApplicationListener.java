@@ -50,7 +50,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    for (int i = 0; i < 1000; i++) {
+                    for (int i = 0; i < 200; i++) {
                         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(980));
                         try (Entry entry = SphU.entry("send")) {
                             // 被保护的逻辑
@@ -71,7 +71,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    for (int i = 0; i < 1000; i++) {
+                    for (int i = 0; i < 200; i++) {
                         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(980));
                         try (Entry entry = SphU.entry("send")) {
                             // 被保护的逻辑

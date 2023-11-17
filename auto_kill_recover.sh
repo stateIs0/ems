@@ -23,13 +23,22 @@ kill -9 $pid
 echo "kill $pid $path"
 
 echo "开始休眠1..."
-sleep 3
+sleep 10
 
 echo "结束休眠1.，，."
 
 current=$(date +%s)
 
-cd /Users/cxs/ty60/simple-stream
+# 检查系统类型
+if [ "$os_type" == "Linux" ]; then
+    echo "This is Linux."
+elif [ "$os_type" == "Darwin" ]; then
+    echo "This is macOS."
+    cd ~/ty60/ems
+else
+    echo "Unsupported operating system."
+fi
+
 
 current=$(date +%s)
 

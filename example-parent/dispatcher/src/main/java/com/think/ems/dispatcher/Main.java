@@ -52,7 +52,7 @@ public class Main {
                 checkResult();
             }
         }).start();
-        //auto_kill_recover();
+        auto_kill_recover();
         LockSupport.park();
     }
 
@@ -60,11 +60,9 @@ public class Main {
 
         ScheduledThreadPoolExecutor es = new ScheduledThreadPoolExecutor(1);
 
-        AtomicInteger atomicInteger = new AtomicInteger();
-
-        es.schedule(() -> {
+        es.scheduleWithFixedDelay(() -> {
             killAndRe();
-        }, 30, TimeUnit.SECONDS);
+        }, 30, 30, TimeUnit.SECONDS);
 
     }
 

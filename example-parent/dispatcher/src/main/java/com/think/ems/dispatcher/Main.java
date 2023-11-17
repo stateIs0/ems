@@ -60,9 +60,14 @@ public class Main {
 
         ScheduledThreadPoolExecutor es = new ScheduledThreadPoolExecutor(1);
 
-        es.schedule(() -> {
+        AtomicInteger count = new AtomicInteger();
+
+        es.scheduleWithFixedDelay(() -> {
+            if (count.incrementAndGet() > 3) {
+                return;
+            }
             killAndRe();
-        }, 50, TimeUnit.SECONDS);
+        }, 50, 50, TimeUnit.SECONDS);
 
     }
 

@@ -60,25 +60,9 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         consumer.register(msgs -> {
             try (Entry entry = SphU.entry("Group")) {
                 Msg m = msgs.get(0);
-                boolean b = new Random().nextInt(5000) % 1000 == 0;
-//                boolean b = false;
-                if (m.getRealTopic().contains("RETRY")) {
-                    log.warn("重试消息......topic={}, times={}, id={}",
-                            m.getRealTopic(), m.getConsumerTimes(), m.getMsgId());
-                    if (m.getConsumerTimes() == 15) {
-                        save(topic, m, group);
-                        return ConsumerResult.success();
-                    }
-                    return ConsumerResult.fail();
-                }
-                if (!b) {
-                    save(topic, m, group);
-                    log.info("msg id =[{}]", m.getMsgId());
-                    return ConsumerResult.success();
-                } else {
-                    log.warn("开始重试 ----->>>> {} {}", m.getRealTopic(), m.getMsgId());
-                    return ConsumerResult.fail();
-                }
+                save(topic, m, group);
+                log.info("msg id =[{}]", m.getMsgId());
+                return ConsumerResult.success();
             } catch (BlockException ex) {
                 System.out.println("blocked!");
                 return ConsumerResult.fail();

@@ -48,7 +48,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    for (int i = 0; i < Integer.MAX_VALUE; i++) {
+                    for (int i = 0; i < 1000; i++) {
                         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(980));
                         try (Entry entry = SphU.entry("send")) {
                             producer.send(Msg.builder().topic("TopicA").body(b.toString()).build());
@@ -66,7 +66,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    for (int i = 0; i < Integer.MAX_VALUE; i++) {
+                    for (int i = 0; i < 1000; i++) {
                         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(980));
                         try (Entry entry = SphU.entry("send")) {
                             // 被保护的逻辑

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-keyword="springboot"
+keyword="java"
 
 pids=$(ps aux | grep $keyword | grep -v grep | awk '{print $2}')
 

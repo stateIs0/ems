@@ -12,6 +12,8 @@ import com.alibaba.csp.sentinel.slots.block.RuleConstant;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.Redisson;
+import org.redisson.api.RAtomicLong;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Service;
@@ -41,6 +43,8 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
     Broker broker;
     @Resource
     RunningLogService runningLogService;
+    @Resource
+    Redisson redisson;
 
     public void main() {
 
@@ -76,12 +80,14 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
     }
 
     private void save(String topic, Msg m, String group) {
-        RunningLog runningLog = new RunningLog();
-        runningLog.setTopicName(topic);
-        runningLog.setConsumerTimes(m.getConsumerTimes());
-        runningLog.setGroupName(group);
-        runningLog.setOffset(m.getMsgId());
-        runningLogService.save(runningLog);
+//        RunningLog runningLog = new RunningLog();
+//        runningLog.setTopicName(topic);
+//        runningLog.setConsumerTimes(m.getConsumerTimes());
+//        runningLog.setGroupName(group);
+//        runningLog.setOffset(m.getMsgId());
+//        runningLogService.save(runningLog);
+        RAtomicLong atomicLong = redisson.getAtomicLong("hello");
+        atomicLong.incrementAndGet();
     }
 
     private static void initFlowRules() {

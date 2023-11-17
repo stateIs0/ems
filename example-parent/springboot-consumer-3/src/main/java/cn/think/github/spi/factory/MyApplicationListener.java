@@ -73,25 +73,13 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
                     log.warn("重试消息......topic={}, times={}, id={}",
                             m.getRealTopic(), m.getConsumerTimes(), m.getMsgId());
                     if (m.getConsumerTimes() == 15) {
-                        RunningLog runningLog = new RunningLog();
-                        runningLog.setOffset(topic);
-                        runningLog.setTopicName(topic);
-                        runningLog.setConsumerTimes(m.getConsumerTimes());
-                        runningLog.setGroupName(group);
-                        runningLog.setOffset(m.getMsgId());
-//                        runningLogService.save(runningLog);
+                        save(topic, m, group);
                         return ConsumerResult.success();
                     }
                     return ConsumerResult.fail();
                 }
                 if (!b) {
-                    RunningLog runningLog = new RunningLog();
-                    runningLog.setOffset(topic);
-                    runningLog.setTopicName(topic);
-                    runningLog.setConsumerTimes(m.getConsumerTimes());
-                    runningLog.setGroupName(group);
-                    runningLog.setOffset(m.getMsgId());
-//                    runningLogService.save(runningLog);
+                    save(topic, m, group);
                     log.info("msg id =[{}]", m.getMsgId());
                     return ConsumerResult.success();
                 } else {
@@ -108,6 +96,16 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         consumer.start();
 
 
+    }
+
+    private void save(String topic, Msg m, String group) {
+        RunningLog runningLog = new RunningLog();
+        runningLog.setOffset(topic);
+        runningLog.setTopicName(topic);
+        runningLog.setConsumerTimes(m.getConsumerTimes());
+        runningLog.setGroupName(group);
+        runningLog.setOffset(m.getMsgId());
+        runningLogService.save(runningLog);
     }
 
     public void main2() {
@@ -128,27 +126,16 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
             try (Entry entry = SphU.entry("Group")) {
                 Msg m = msgs.get(0);
                 boolean b = new Random().nextInt(5000) % 1000 == 0;
-//                boolean b = false;
                 if (m.getRealTopic().contains("RETRY")) {
                     log.warn("重试消息......topic={}, times={}, id={}",
                             m.getRealTopic(), m.getConsumerTimes(), m.getMsgId());
                     if (m.getConsumerTimes() == 15) {
-                        RunningLog runningLog = new RunningLog();
-                        runningLog.setTopicName(topic);
-                        runningLog.setConsumerTimes(m.getConsumerTimes());
-                        runningLog.setGroupName(group);
-                        runningLog.setOffset(m.getMsgId());
-                        runningLogService.save(runningLog);
+                        save(topic, m, group);
                     }
                     return ConsumerResult.fail();
                 }
                 if (!b) {
-                    RunningLog runningLog = new RunningLog();
-                    runningLog.setTopicName(topic);
-                    runningLog.setConsumerTimes(m.getConsumerTimes());
-                    runningLog.setGroupName(group);
-                    runningLog.setOffset(m.getMsgId());
-                    runningLogService.save(runningLog);
+                    save(topic, m, group);
                     log.info("msg id =[{}]", m.getMsgId());
                     return ConsumerResult.success();
                 } else {

@@ -60,9 +60,9 @@ public class Main {
 
         ScheduledThreadPoolExecutor es = new ScheduledThreadPoolExecutor(1);
 
-        es.scheduleWithFixedDelay(() -> {
+        es.schedule(() -> {
             killAndRe();
-        }, 30, 30, TimeUnit.SECONDS);
+        }, 50, TimeUnit.SECONDS);
 
     }
 

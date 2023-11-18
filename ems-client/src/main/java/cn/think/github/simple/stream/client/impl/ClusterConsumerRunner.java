@@ -3,13 +3,16 @@ package cn.think.github.simple.stream.client.impl;
 import cn.think.github.simple.stream.api.ConsumerResult;
 import cn.think.github.simple.stream.api.Msg;
 import cn.think.github.simple.stream.api.spi.LockFailException;
+import cn.think.github.simple.stream.api.spi.RedisClient;
 import cn.think.github.simple.stream.client.support.CollectionUtils;
 import cn.think.github.spi.factory.NamedThreadFactory;
+import cn.think.github.spi.factory.SpiFactory;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +39,7 @@ public class ClusterConsumerRunner implements Runnable {
         this.clientIdId = clientIdId;
         this.threadNum = threadNum;
         this.workerPool = new ThreadPoolExecutor(
-                0,
+                threadNum,
                 consumerClient.threadNum,
                 60,
                 TimeUnit.SECONDS,
@@ -71,12 +74,20 @@ public class ClusterConsumerRunner implements Runnable {
                 return;
             }
 
-            List<Msg> finalMsgList = msgList;
-            while (workerPool.getActiveCount() == threadNum) {
-                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+            for (Msg msg : msgList) {
+                SpiFactory.getInstance().getObj(RedisClient.class).get()
+                        .getAtomicLong("baby").incrementAndGet();
             }
-            //workerPool.execute(() -> consumer(finalMsgList));
-            consumer(finalMsgList);
+
+            List<Msg> finalMsgList = msgList;
+            while (true) {
+                try {
+                    workerPool.execute(() -> consumer(finalMsgList));
+                    break;
+                } catch (RejectedExecutionException r) {
+                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+                }
+            }
         } catch (Throwable e) {
             log.error(e.getMessage(), e);
         }

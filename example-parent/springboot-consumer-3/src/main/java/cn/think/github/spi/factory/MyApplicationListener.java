@@ -73,7 +73,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
             try (Entry ignored = SphU.entry("Group")) {
                 Msg m = msgs.get(0);
                 save(topic, m, group);
-                log.info("msg id =[{}]", m.getMsgId());
+                //log.info("msg id =[{}]", m.getMsgId());
                 return ConsumerResult.success();
             } catch (BlockException e) {
                 e.printStackTrace();
@@ -117,7 +117,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
             try (Entry entry = SphU.entry("Group")) {
                 Msg m = msgs.get(0);
                 save(topic, m, group);
-                log.info("msg id =[{}]", m.getMsgId());
+                //log.info("msg id =[{}]", m.getMsgId());
                 return ConsumerResult.success();
             } catch (BlockException ex) {
                 System.out.println("blocked!");

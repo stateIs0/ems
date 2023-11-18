@@ -75,7 +75,8 @@ public class ClusterConsumerRunner implements Runnable {
             while (workerPool.getActiveCount() == threadNum) {
                 LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
             }
-            workerPool.execute(() -> consumer(finalMsgList));
+            //workerPool.execute(() -> consumer(finalMsgList));
+            consumer(finalMsgList);
         } catch (Throwable e) {
             log.error(e.getMessage(), e);
         }

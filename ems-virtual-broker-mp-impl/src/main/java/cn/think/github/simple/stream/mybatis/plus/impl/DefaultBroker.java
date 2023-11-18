@@ -252,19 +252,18 @@ public class DefaultBroker implements Broker {
             return null;
         }
 
-        long newOffset = 0L;
-        long tmp;
-        tmp = offsetMax + 1;
+        final long min = offsetMax + 1;
+        long lastMaxOffset = min;
         List<TopicGroupLog> list = new ArrayList<>();
         int batchSize = emsSystemConfig.consumerBatchSize();
         for (int i = 0; i < (max - offsetMax > batchSize ? batchSize : max - offsetMax); i++) {
-            newOffset = offsetMax + 1;
-            offsetMax = newOffset;
+            lastMaxOffset = offsetMax + 1;
+            offsetMax = lastMaxOffset;
             TopicGroupLog db = new TopicGroupLog();
             db.setGroupName(group);
             db.setTopicName(topicName);
             db.setState(TopicGroupLog.STATE_START);
-            db.setPhysicsOffset(newOffset);
+            db.setPhysicsOffset(lastMaxOffset);
             db.setClientId(clientId);
             db.setCreateTime(new Date());
             db.setUpdateTime(new Date());
@@ -272,8 +271,8 @@ public class DefaultBroker implements Broker {
         }
 
         logService.saveBatch(list);
-        logService.setMaxLogOffset(topicName, group, newOffset);
-        return new OffsetPair(tmp, newOffset);
+        logService.setMaxLogOffset(topicName, group, lastMaxOffset);
+        return new OffsetPair(min, lastMaxOffset);
     }
 
     @Data

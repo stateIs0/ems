@@ -74,11 +74,6 @@ public class ClusterConsumerRunner implements Runnable {
                 return;
             }
 
-            for (Msg msg : msgList) {
-                SpiFactory.getInstance().getObj(RedisClient.class).get()
-                        .getAtomicLong("baby").incrementAndGet();
-            }
-
             List<Msg> finalMsgList = msgList;
             while (true) {
                 try {

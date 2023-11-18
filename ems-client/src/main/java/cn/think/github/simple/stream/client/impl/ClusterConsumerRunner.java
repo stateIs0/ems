@@ -85,13 +85,14 @@ public class ClusterConsumerRunner implements Runnable {
         List<Msg> ack = new ArrayList<>();
         for (Msg m : finalMsgList) {
             try {
+                m.setReceiveLater(true);
                 List<Msg> w = new ArrayList<>();
                 w.add(m);
-                ConsumerResult consumer = consumerClient.bizListener.consumer(w);
-                if (consumer == null) {
+                ConsumerResult result = consumerClient.bizListener.consumer(w);
+                if (result == null) {
                     throw new RuntimeException("消费者不能返回 null");
                 }
-                m.setReceiveLater(consumer.isReceiveLater());
+                m.setReceiveLater(result.isReceiveLater());
             } catch (OutOfMemoryError error) {
                 // oom 了 todo 特殊处理
                 log.error(error.getMessage(), error);

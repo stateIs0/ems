@@ -18,7 +18,7 @@ public class BroadcastConsumerRunnerTest {
         String offset = BroadcastConsumerRunner.PersistenceOffset.getOffset("aaaT", "aaaG");
         BroadcastConsumerRunner.PersistenceOffset.persistence(3L, "aaaT", "aaaG");
         System.out.println(offset);
-        offset = BroadcastConsumerRunner.PersistenceOffset.getOffset("aaaT", "aaaG");
+        offset = BroadcastConsumerRunner.PersistenceOffset.getOffset("aaaT", "aaaC");
         System.out.println(offset);
 
     }

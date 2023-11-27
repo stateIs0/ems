@@ -12,7 +12,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -23,6 +26,10 @@ import java.util.concurrent.locks.LockSupport;
  **/
 @Slf4j
 public class BroadcastConsumerRunner implements Runnable {
+
+    private static final String BROAD_CAST_DIR = "ems_bc/";
+
+    private static boolean init = false;
 
     // 广播消息;
     // 如果磁盘没有记录, 则从当前时间 最新的消息开始消费
@@ -120,7 +127,8 @@ public class BroadcastConsumerRunner implements Runnable {
 
         public static void persistence(Long offset, String topic, String group) throws IOException {
             // 注意: k8s 场景下, 持久化也没用.
-            File file = new File(group + "$" + topic);
+            initDir();
+            File file = new File(BROAD_CAST_DIR + group + "$" + topic);
             if (file.exists()) {
                 Files.write(file.toPath(), String.valueOf(offset).getBytes());
                 return;
@@ -134,8 +142,9 @@ public class BroadcastConsumerRunner implements Runnable {
         }
 
         public static String getOffset(String topic, String group) {
+            initDir();
             try {
-                String filePath = group + "$" + topic;
+                String filePath = BROAD_CAST_DIR + group + "$" + topic;
                 if (!new File(filePath).exists()) {
                     log.info("offset {} 文件不存在", filePath);
                     return null;
@@ -153,5 +162,20 @@ public class BroadcastConsumerRunner implements Runnable {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    private static void initDir() {
+        if (init) {
+            return;
+        }
+        File dir = new File(BROAD_CAST_DIR);
+        if (!dir.exists()) {
+            boolean result = dir.mkdir();
+            if (!result) {
+                log.warn("create [ems_bc/] dir fail");
+                return;
+            }
+        }
+        init = true;
     }
 }

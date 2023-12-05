@@ -3,6 +3,7 @@ package cn.think.github.simple.stream.mybatis.plus.impl.crud.services;
 import cn.think.github.simple.stream.api.spi.RedisClient;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.TopicGroupLog;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.TopicGroupLogMapper;
+import cn.think.github.simple.stream.mybatis.plus.impl.util.RedisKeyFixString;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -28,7 +29,7 @@ public class LogService extends ServiceImpl<TopicGroupLogMapper, TopicGroupLog> 
     private TopicGroupLogMapper topicGroupLogMapper;
 
     static String buildMaxLogOffsetKey(String topic, String group) {
-        return topic + "$$__##__%%" + group;
+        return String.format(RedisKeyFixString.GROUP_LOG_MAX_OFFSET_CACHE, topic, group);
     }
 
     public void setMaxLogOffset(String topic, String group, long offset) {
@@ -37,11 +38,10 @@ public class LogService extends ServiceImpl<TopicGroupLogMapper, TopicGroupLog> 
 
     public Long getLogMaxOffset(String t, String g) {
 
-        String s = redisClient.get(buildMaxLogOffsetKey(t, g));
-        if (s != null) {
-            return Long.valueOf(s);
+        String offsetString = redisClient.get(buildMaxLogOffsetKey(t, g));
+        if (offsetString != null) {
+            return Long.valueOf(offsetString);
         } else {
-            // from {@code setMaxOffset(String topic, String group, long offset)}
             TopicGroupLog topicGroupLog = topicGroupLogMapper.selectOne(
                     new QueryWrapper<TopicGroupLog>().lambda().
                             eq(TopicGroupLog::getTopicName, t).
@@ -68,6 +68,7 @@ public class LogService extends ServiceImpl<TopicGroupLogMapper, TopicGroupLog> 
     public int updateOffset(String group, long offset) {
         TopicGroupLog topicGroupLog = new TopicGroupLog();
         topicGroupLog.setPhysicsOffset(offset);
+        topicGroupLog.setUpdateTime(new Date());
 
         return baseMapper.update(topicGroupLog, new LambdaQueryWrapper<TopicGroupLog>().eq(TopicGroupLog::getGroupName, group));
     }

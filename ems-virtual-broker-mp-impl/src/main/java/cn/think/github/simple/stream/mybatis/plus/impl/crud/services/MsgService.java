@@ -9,6 +9,7 @@ import cn.think.github.simple.stream.mybatis.plus.impl.lock.LockFactory;
 import cn.think.github.simple.stream.mybatis.plus.impl.lock.LockKeyFixString;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.SimpleMsg;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.SimpleMsgMapper;
+import cn.think.github.simple.stream.mybatis.plus.impl.util.RedisKeyFixString;
 import cn.think.github.simple.stream.mybatis.plus.impl.util.StringUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -24,6 +25,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import static cn.think.github.simple.stream.mybatis.plus.impl.util.RedisKeyFixString.EMS_JUST_PRODUCED_CACHE;
+
 /**
  * @version 1.0
  * @Author cxs
@@ -36,8 +39,6 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
 
     private final Map<String, RedisClient.AtomicLong> memoryCache = new ConcurrentHashMap<>();
 
-    private static final String EMS_JUST_PRODUCED_PREFIX = "EMS_JUST_PRODUCED_%s";
-
     @Resource
     RedisClient redisClient;
 
@@ -48,11 +49,9 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
     String emsSendMaxOptType;
 
     public Long getMsgMaxOffset(String topic) {
-        if ("cache".equals(emsSendMaxOptType)) {
-            String offset = redisClient.get(buildMsgMaxOffsetRedisKey(topic));
-            if (StringUtil.isNotEmpty(offset)) {
-                return Long.valueOf(offset);
-            }
+        String offset = redisClient.get(buildMsgMaxOffsetRedisKey(topic));
+        if (StringUtil.isNotEmpty(offset)) {
+            return Long.valueOf(offset);
         }
         SimpleMsg simpleMsg = baseMapper.selectOne
                 (new LambdaQueryWrapper<SimpleMsg>()
@@ -66,7 +65,7 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
     }
 
     private void flagJustProduced(String topic) {
-        redisClient.set(String.format(EMS_JUST_PRODUCED_PREFIX, topic), Boolean.toString(true), 3, TimeUnit.SECONDS);
+        redisClient.set(String.format(EMS_JUST_PRODUCED_CACHE, topic), Boolean.toString(true), 3, TimeUnit.SECONDS);
     }
 
     /**
@@ -75,7 +74,7 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
      * @return true 3s 刚刚产生了消息
      */
     public boolean justProduced(String topic) {
-        return Boolean.parseBoolean(redisClient.get(String.format(EMS_JUST_PRODUCED_PREFIX, topic)));
+        return Boolean.parseBoolean(redisClient.get(String.format(EMS_JUST_PRODUCED_CACHE, topic)));
     }
 
     public Long getMin(String t) {
@@ -86,12 +85,7 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
     }
 
     public String insert(Msg msg) {
-        long msgId;
-        if ("cache".equals(emsSendMaxOptType)) {
-            msgId = getMaxFromCacheWithInsert(msg);
-        } else {
-            msgId = getMaxFromStoreWithInsert(msg);
-        }
+        long msgId = getMaxFromCacheWithInsert(msg);
         // save offset record for consumer.
         // 这里有可能设置的并不是最大的 offset, 但是不想上锁; 30s 缓存失效兜底兜底.
         redisClient.set(buildMsgMaxOffsetRedisKey(msg.getTopic()),
@@ -150,7 +144,7 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
     }
 
     public static String buildMsgMaxOffsetRedisKey(String topic) {
-        return topic + "#MaxOffset";
+        return String.format(RedisKeyFixString.TOPIC_MAX_OFFSET_CACHE, topic);
     }
 
 

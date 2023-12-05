@@ -1,4 +1,4 @@
-package cn.think.github.spi.factory;
+package cn.think.github.simple.stream.api.util;
 
 /**
  * @version 1.0

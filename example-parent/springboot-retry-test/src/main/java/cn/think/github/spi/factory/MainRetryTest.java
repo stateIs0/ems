@@ -2,6 +2,7 @@ package cn.think.github.spi.factory;
 
 import cn.think.github.simple.stream.api.StreamAdmin;
 import cn.think.github.simple.stream.api.monitor.MonitorTopic;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

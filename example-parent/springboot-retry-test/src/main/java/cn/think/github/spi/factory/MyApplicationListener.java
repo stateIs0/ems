@@ -2,6 +2,7 @@ package cn.think.github.spi.factory;
 
 import cn.think.github.simple.stream.api.*;
 import cn.think.github.simple.stream.api.spi.Broker;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import cn.think.github.simple.stream.client.api.impl.SimpleConsumerImpl;
 import cn.think.github.simple.stream.client.api.impl.SimpleProducerImpl;
 import com.alibaba.csp.sentinel.slots.block.RuleConstant;
@@ -94,7 +95,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
                 throw new RuntimeException(ignore);
             }
             preTime[0] = System.currentTimeMillis();
-            return ConsumerResult.success();
+            return ConsumerResult.fail();
         });
 
         consumer.start();

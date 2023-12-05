@@ -18,11 +18,9 @@ import java.util.Date;
 @TableName("ems_retry_msg")
 public class RetryMsg extends BaseDO {
 
-    public static int maxTimes = 16;
-
-    public static int STATA_INIT = 1;
-    public static int STATA_SUCCESS = 2;
-    public static int STATA_HANDLE = 3;// 处理中.
+    public static int STATE_INIT = 1;
+    public static int STATE_SUCCESS = 2;
+    public static int STATE_PROCESSING = 3;// 处理中.
 
     String oldTopicName;
 

@@ -2,7 +2,7 @@ package cn.think.github.simple.stream.client;
 
 
 import cn.think.github.simple.stream.api.spi.Broker;
-import cn.think.github.spi.factory.SpiFactory;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 
 import java.util.function.Supplier;
 

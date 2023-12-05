@@ -1,4 +1,4 @@
-package cn.think.github.spi.factory;
+package cn.think.github.simple.stream.api.util;
 
 import java.util.ServiceLoader;
 import java.util.function.Supplier;

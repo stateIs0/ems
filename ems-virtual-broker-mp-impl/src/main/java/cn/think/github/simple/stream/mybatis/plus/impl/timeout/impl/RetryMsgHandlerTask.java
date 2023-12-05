@@ -11,8 +11,8 @@ import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.SimpleMsg;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.RetryMsgMapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.SimpleMsgMapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.timeout.SimpleMsgWrapper;
-import cn.think.github.spi.factory.NamedThreadFactory;
-import cn.think.github.spi.factory.SpiFactory;
+import cn.think.github.simple.stream.api.util.NamedThreadFactory;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -67,7 +67,7 @@ public class RetryMsgHandlerTask implements LifeCycle {
             retryMsgList.addAll(l1);
         }
         for (RetryMsg retryMsg : retryMsgList) {
-            retryMsg.setState(RetryMsg.STATA_HANDLE);
+            retryMsg.setState(RetryMsg.STATE_PROCESSING);
             retryMsg.setUpdateTime(new Date());
             retryMsg.setClientId(this.clientId);
             retryMsgMapper.updateById(retryMsg);
@@ -92,7 +92,7 @@ public class RetryMsgHandlerTask implements LifeCycle {
                         oldTopicName, offset, item.getCreateTime(), item.getConsumerTimes(), item.getNextConsumerTime());
                 RetryMsg retryMsg = new RetryMsg();
                 retryMsg.setId(item.getId());
-                retryMsg.setState(RetryMsg.STATA_SUCCESS);
+                retryMsg.setState(RetryMsg.STATE_SUCCESS);
                 retryMsg.setUpdateTime(new Date());
                 retryMsgMapper.updateById(retryMsg);
                 continue;
@@ -105,7 +105,7 @@ public class RetryMsgHandlerTask implements LifeCycle {
 
     @Override
     public void start() {
-        service.scheduleAtFixedRate(() -> {
+        service.scheduleWithFixedDelay(() -> {
             try {
                 if (this.clientId == null) {
                     this.clientId = IPv4AddressUtil.get() + "@" + PIDUtil.get() + "@RetryTaskThread@" + UUID.randomUUID();

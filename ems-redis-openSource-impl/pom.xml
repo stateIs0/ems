@@ -6,7 +6,7 @@
     <parent>
         <groupId>com.github.colosobo.base.ems</groupId>
         <artifactId>ems-parent</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>1.0.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>ems-redis-openSource-impl</artifactId>
@@ -21,7 +21,7 @@
         <dependency>
             <groupId>com.github.colosobo.base.ems</groupId>
             <artifactId>ems-api</artifactId>
-            <version>1.0-SNAPSHOT</version>
+            <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
         <dependency>

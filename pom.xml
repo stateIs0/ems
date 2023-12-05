@@ -6,17 +6,15 @@
 
     <groupId>com.github.colosobo.base.ems</groupId>
     <artifactId>ems-parent</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <modules>
-        <module>ems-spi-factory</module>
         <module>ems-api</module>
         <module>ems-client</module>
         <module>ems-redis-openSource-impl</module>
         <module>ems-springboot2-openSource-starter</module>
         <module>ems-virtual-broker-mp-impl</module>
-
         <module>example-parent</module>
         <module>example-parent/dispatcher</module>
     </modules>

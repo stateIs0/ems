@@ -3,11 +3,12 @@ package cn.think.github.simple.stream.mybatis.plus.impl;
 import cn.think.github.simple.stream.api.EmsSystemConfig;
 import cn.think.github.simple.stream.api.LifeCycle;
 import cn.think.github.simple.stream.api.Msg;
-import cn.think.github.simple.stream.api.StreamAdmin;
 import cn.think.github.simple.stream.api.simple.util.EmsEmptyList;
 import cn.think.github.simple.stream.api.spi.Broker;
 import cn.think.github.simple.stream.api.spi.LockFailException;
 import cn.think.github.simple.stream.api.spi.StreamLock;
+import cn.think.github.simple.stream.api.util.JsonUtil;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.GroupClientTableService;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.LogService;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.MsgService;
@@ -20,6 +21,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -29,6 +31,8 @@ import java.io.StringReader;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -39,8 +43,6 @@ public class DefaultBroker implements Broker {
     private MsgService msgService;
     @Resource
     private LogService logService;
-    @Resource
-    private StreamAdmin streamAdmin;
     @Resource
     private GroupClientTableService groupClientTableService;
     @Resource
@@ -131,7 +133,7 @@ public class DefaultBroker implements Broker {
         }
         List<SimpleMsg> msgArrayList = new ArrayList<>();
         if (offsetPair != null) {
-            msgArrayList = msgService.getBatch(topicName, offsetPair.min, offsetPair.max);
+            msgArrayList = getSimpleMsgList(topicName, offsetPair, group);
         }
         List<SimpleMsgWrapper> retryMsgList = retryMsgHandler.getRetryMsgList(topicName, group);
 
@@ -140,6 +142,26 @@ public class DefaultBroker implements Broker {
         }
 
         return filterMsgList(retryMsgList, msgArrayList);
+    }
+
+    @NotNull
+    private List<SimpleMsg> getSimpleMsgList(String topicName, OffsetPair offsetPair, String group) {
+        List<SimpleMsg> msgArrayList;
+        msgArrayList = msgService.getBatch(topicName, offsetPair.min, offsetPair.max);
+        // 可能 redis 提交了, 但事务没提交, 这里不上锁, 兼容处理. 处理 N 次...
+        int count = 0;
+        while (((offsetPair.max - offsetPair.min) + 1) != msgArrayList.size()) {
+            log.warn("msg size fall short of expectations....topic = {}, group = {}, ResultMsgSize = {}, offsetPair = {}",
+                    topicName, group, msgArrayList.size(), offsetPair);
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+            msgArrayList = msgService.getBatch(topicName, offsetPair.min, offsetPair.max);
+
+            if (++count > 20 && ((offsetPair.max - offsetPair.min) + 1) != msgArrayList.size()) {
+                log.warn("消息和预期数量不一致, 可能是发送时出了问题, 请检查...");
+                return msgArrayList;
+            }
+        }
+        return msgArrayList;
     }
 
 
@@ -159,17 +181,16 @@ public class DefaultBroker implements Broker {
 
         if (!badList.isEmpty()) {
             retryMsgHandler.saveRetry(badList, group);
-            logService.updateOffsetBatch(topic, group, clientId, TopicGroupLog.STATE_RETRY,
-                    badList.stream().map(Msg::getOffset).collect(Collectors.toList()));
+            logService.updateOffsetBatch(topic, group, clientId, TopicGroupLog.STATE_RETRY, filterNormalMsgOffset(badList));
         }
         if (!goodList.isEmpty()) {
-            logService.updateOffsetBatch(topic, group, clientId, TopicGroupLog.STATE_DONE,
-                    goodList.stream().map(Msg::getOffset).collect(Collectors.toList()));
+            logService.updateOffsetBatch(topic, group, clientId, TopicGroupLog.STATE_DONE, filterNormalMsgOffset(goodList));
             retryMsgHandler.ackSuccessRetryMsgList(goodList);
         }
 
         return true;
     }
+
 
     @Override
     public String send(Msg msg, int timeoutInSec) {
@@ -203,17 +224,12 @@ public class DefaultBroker implements Broker {
         lifeCycles.forEach(LifeCycle::stop);
     }
 
-    private Properties load(String propertiesString) {
+    public Properties load(String propertiesString) {
         if (propertiesString == null) {
             return new Properties();
         }
-        Properties properties = new Properties();
-        try {
-            properties.load(new StringReader(propertiesString));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        return properties;
+        return SpiFactory.getInstance().getObj(JsonUtil.class)
+                .get().read(propertiesString, Properties.class);
     }
 
     private List<Msg> filterMsgList(List<SimpleMsgWrapper> retryMsgList, List<SimpleMsg> msgArrayList) {
@@ -245,35 +261,60 @@ public class DefaultBroker implements Broker {
 
     private OffsetPair insertMsgLog(String topicName, String group, String clientId) {
         // topic max
-        Long max = msgService.getMsgMaxOffset(topicName);
+        Long msgMaxOffset = msgService.getMsgMaxOffset(topicName);
+        if (msgMaxOffset < 0) {
+            // no msg;
+            return null;
+        }
         // group max
-        Long offsetMax = logService.getMaxLogOffset(topicName, group);
-        if (offsetMax >= max) {
+        Long logOffsetMax = logService.getLogMaxOffset(topicName, group);
+        // first consumption
+        if (logOffsetMax < 0) {
+            // first produced
+            if (msgService.justProduced(topicName)) {
+                logOffsetMax = 0L;
+            } else {
+                logOffsetMax = msgMaxOffset - 1;
+            }
+        }
+        if (logOffsetMax >= msgMaxOffset) {
             return null;
         }
 
-        long newOffset = 0L;
-        long tmp;
-        tmp = offsetMax + 1;
+        final long min = logOffsetMax + 1;
+        long lastMaxOffset = min;
         List<TopicGroupLog> list = new ArrayList<>();
         int batchSize = emsSystemConfig.consumerBatchSize();
-        for (int i = 0; i < (max - offsetMax > batchSize ? batchSize : max - offsetMax); i++) {
-            newOffset = offsetMax + 1;
-            offsetMax = newOffset;
+        long m = (msgMaxOffset - logOffsetMax > batchSize ? batchSize : msgMaxOffset - logOffsetMax);
+        for (int i = 0; i < m; i++) {
+            lastMaxOffset = logOffsetMax + 1;
+            logOffsetMax = lastMaxOffset;
             TopicGroupLog db = new TopicGroupLog();
             db.setGroupName(group);
             db.setTopicName(topicName);
             db.setState(TopicGroupLog.STATE_START);
-            db.setPhysicsOffset(newOffset);
+            db.setPhysicsOffset(lastMaxOffset);
             db.setClientId(clientId);
             db.setCreateTime(new Date());
             db.setUpdateTime(new Date());
             list.add(db);
         }
 
+        if (list.isEmpty()) {
+            return null;
+        }
+
         logService.saveBatch(list);
-        logService.setMaxLogOffset(topicName, group, newOffset);
-        return new OffsetPair(tmp, newOffset);
+        logService.setMaxLogOffset(topicName, group, lastMaxOffset);
+        return new OffsetPair(min, lastMaxOffset);
+    }
+
+
+    /**
+     * 过滤消息(非重试消息),并 map 为 offset.
+     */
+    private List<Long> filterNormalMsgOffset(List<Msg> list) {
+        return list.stream().filter(i -> !retryMsgHandler.isRetryTopic(i.getRealTopic())).map(Msg::getOffset).collect(Collectors.toList());
     }
 
     @Data

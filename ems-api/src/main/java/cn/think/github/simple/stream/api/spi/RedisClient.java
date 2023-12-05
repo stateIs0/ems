@@ -16,6 +16,8 @@ public interface RedisClient {
 
         long incrementAndGet();
 
+        long incrementAndGet(long n);
+
         long get();
     }
 }

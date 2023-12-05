@@ -8,7 +8,7 @@ import cn.think.github.simple.stream.api.simple.util.TopicConstant;
 import cn.think.github.simple.stream.api.spi.Broker;
 import cn.think.github.simple.stream.client.VirtualBrokerFactory;
 import cn.think.github.simple.stream.client.support.ProducerClient;
-import cn.think.github.spi.factory.SpiFactory;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;

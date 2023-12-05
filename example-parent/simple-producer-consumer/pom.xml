@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.github.colosobo.base.ems</groupId>
-        <artifactId>ems-parent</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <artifactId>example-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>ems-spi-factory</artifactId>
+    <artifactId>simple-producer-consumer</artifactId>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>

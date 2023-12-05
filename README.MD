@@ -30,7 +30,7 @@ Extension MySQL Stream； 扩展 MySQL 队列.
 <dependency>
     <groupId>com.github.colosobo.base.ems</groupId>
     <artifactId>ems-springboot2-openSource-starter</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
 </dependency>
 ```
 

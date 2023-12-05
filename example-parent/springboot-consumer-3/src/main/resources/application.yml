@@ -16,7 +16,9 @@ spring:
     druid:
       max-active: 300
 
-
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 ems:
   enabled: true

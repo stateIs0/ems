@@ -1,13 +1,11 @@
 package cn.think.github.simple.stream.mybatis.plus.impl;
 
-import cn.think.github.spi.factory.SpiFactory;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 
 /**
@@ -38,9 +36,16 @@ public class BrokerSpiFactoryImpl implements SpiFactory {
     public <T> Supplier<T> getObj(Class<T> c) {
         T bean = null;
         try {
-            while (brokerSpiFactory == null) {
-                log.warn("brokerSpiFactory is null, wait springboot ready....");
-                LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
+            if (brokerSpiFactory == null) {
+                log.warn("brokerSpiFactory is null ....");
+                return () -> {
+                    if (brokerSpiFactory == null || brokerSpiFactory.applicationContext == null) {
+                        log.warn("spring applicationContext 容器没有初始化....");
+                        return null;
+                    } else {
+                        return brokerSpiFactory.applicationContext.getBean(c);
+                    }
+                };
             }
             if (brokerSpiFactory.applicationContext == null) {
                 log.warn("spring applicationContext 容器没有初始化....");

@@ -25,7 +25,7 @@ public class LogService extends ServiceImpl<TopicGroupLogMapper, TopicGroupLog> 
     @Resource
     private RedisClient redisClient;
     @Resource
-    TopicGroupLogMapper topicGroupLogMapper;
+    private TopicGroupLogMapper topicGroupLogMapper;
 
     static String buildMaxLogOffsetKey(String topic, String group) {
         return topic + "$$__##__%%" + group;
@@ -35,7 +35,7 @@ public class LogService extends ServiceImpl<TopicGroupLogMapper, TopicGroupLog> 
         redisClient.set(buildMaxLogOffsetKey(topic, group), String.valueOf(offset), 30, TimeUnit.SECONDS);
     }
 
-    public Long getMaxLogOffset(String t, String g) {
+    public Long getLogMaxOffset(String t, String g) {
 
         String s = redisClient.get(buildMaxLogOffsetKey(t, g));
         if (s != null) {
@@ -49,7 +49,7 @@ public class LogService extends ServiceImpl<TopicGroupLogMapper, TopicGroupLog> 
                             .orderByDesc(TopicGroupLog::getPhysicsOffset)
                             .last("limit 1"));
             if (topicGroupLog == null) {
-                return 0L;
+                return -1L;
             } else {
                 return topicGroupLog.getPhysicsOffset();
             }

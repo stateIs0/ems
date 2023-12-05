@@ -4,12 +4,13 @@ import cn.think.github.simple.stream.api.ConsumerResult;
 import cn.think.github.simple.stream.api.Msg;
 import cn.think.github.simple.stream.api.spi.LockFailException;
 import cn.think.github.simple.stream.client.support.CollectionUtils;
-import cn.think.github.spi.factory.NamedThreadFactory;
+import cn.think.github.simple.stream.api.util.NamedThreadFactory;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +37,7 @@ public class ClusterConsumerRunner implements Runnable {
         this.clientIdId = clientIdId;
         this.threadNum = threadNum;
         this.workerPool = new ThreadPoolExecutor(
-                0,
+                threadNum,
                 consumerClient.threadNum,
                 60,
                 TimeUnit.SECONDS,
@@ -72,10 +73,14 @@ public class ClusterConsumerRunner implements Runnable {
             }
 
             List<Msg> finalMsgList = msgList;
-            while (workerPool.getActiveCount() == threadNum) {
-                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+            while (true) {
+                try {
+                    workerPool.execute(() -> consumer(finalMsgList));
+                    break;
+                } catch (RejectedExecutionException r) {
+                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+                }
             }
-            workerPool.execute(() -> consumer(finalMsgList));
         } catch (Throwable e) {
             log.error(e.getMessage(), e);
         }
@@ -85,13 +90,14 @@ public class ClusterConsumerRunner implements Runnable {
         List<Msg> ack = new ArrayList<>();
         for (Msg m : finalMsgList) {
             try {
+                m.setReceiveLater(true);
                 List<Msg> w = new ArrayList<>();
                 w.add(m);
-                ConsumerResult consumer = consumerClient.bizListener.consumer(w);
-                if (consumer == null) {
+                ConsumerResult result = consumerClient.bizListener.consumer(w);
+                if (result == null) {
                     throw new RuntimeException("消费者不能返回 null");
                 }
-                m.setReceiveLater(consumer.isReceiveLater());
+                m.setReceiveLater(result.isReceiveLater());
             } catch (OutOfMemoryError error) {
                 // oom 了 todo 特殊处理
                 log.error(error.getMessage(), error);

@@ -55,6 +55,6 @@ public class MySQLEmsSystemConfig {
         SimpleStreamSystemConfig systemConfig = mapper.selectOne(new LambdaQueryWrapper<SimpleStreamSystemConfig>()
                 .eq(SimpleStreamSystemConfig::getSimpleKey, "consumerRetryMaxTimes")
                 .eq(SimpleStreamSystemConfig::getDeleted, DELETED_EXIST));
-        return systemConfig == null ? 15 : Integer.parseInt(systemConfig.getSimpleValue());
+        return systemConfig == null ? 16 : Integer.parseInt(systemConfig.getSimpleValue());
     }
 }

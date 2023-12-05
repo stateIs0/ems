@@ -43,16 +43,23 @@ public class Main {
             kill();
         }));
         System.out.println(DateUtils.current() + " ---> starting .....");
+
         cleanData();
-        startProducer();
+
         startConsumer();
+
+        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(10));
+
+        startProducer();
         new Thread(() -> {
             while (true) {
                 LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(2));
                 checkResult();
             }
         }).start();
-        auto_kill_recover();
+        if (System.getProperty("autoKill") != null) {
+            auto_kill_recover();
+        }
         LockSupport.park();
     }
 
@@ -60,9 +67,14 @@ public class Main {
 
         ScheduledThreadPoolExecutor es = new ScheduledThreadPoolExecutor(1);
 
+        AtomicInteger count = new AtomicInteger();
+
         es.scheduleWithFixedDelay(() -> {
+            if (count.incrementAndGet() > 6) {
+                return;
+            }
             killAndRe();
-        }, 30, 30, TimeUnit.SECONDS);
+        }, 80, 40, TimeUnit.SECONDS);
 
     }
 

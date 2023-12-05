@@ -161,7 +161,7 @@ public class StreamAdminImpl implements StreamAdmin {
             String groupOpKey = LockKeyFixString.getGroupOpKey(topic, group);
             try {
                 LockFactory.get().lockAndExecute(() -> {
-                    Long maxLog = logService.getMaxLogOffset(topic, group);
+                    Long maxLog = logService.getLogMaxOffset(topic, group);
                     if (maxLog == null) {
                         return null;
                     }
@@ -202,7 +202,7 @@ public class StreamAdminImpl implements StreamAdmin {
 
         List<MonitorGroup> r = new ArrayList<>();
         for (String group : collect) {
-            Long maxLog = logService.getMaxLogOffset(topic, group);
+            Long maxLog = logService.getLogMaxOffset(topic, group);
             TopicGroupLog minLog = logService.getMinLog(topic, group);
 
             r.add(MonitorGroup.builder()

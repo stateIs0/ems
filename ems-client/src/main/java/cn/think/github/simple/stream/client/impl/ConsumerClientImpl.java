@@ -1,14 +1,17 @@
 package cn.think.github.simple.stream.client.impl;
 
-import cn.think.github.simple.stream.api.*;
+import cn.think.github.simple.stream.api.EmsSystemConfig;
+import cn.think.github.simple.stream.api.GroupType;
+import cn.think.github.simple.stream.api.SimpleListener;
+import cn.think.github.simple.stream.api.StreamAdmin;
 import cn.think.github.simple.stream.api.simple.util.IPv4AddressUtil;
 import cn.think.github.simple.stream.api.simple.util.PIDUtil;
 import cn.think.github.simple.stream.api.simple.util.TopicConstant;
 import cn.think.github.simple.stream.api.spi.Broker;
+import cn.think.github.simple.stream.api.util.NamedThreadFactory;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import cn.think.github.simple.stream.client.VirtualBrokerFactory;
 import cn.think.github.simple.stream.client.support.ConsumerClient;
-import cn.think.github.spi.factory.NamedThreadFactory;
-import cn.think.github.spi.factory.SpiFactory;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -26,12 +29,12 @@ import java.util.function.Supplier;
 public class ConsumerClientImpl implements ConsumerClient {
 
     public final static ScheduledThreadPoolExecutor RENEW =
-            new ScheduledThreadPoolExecutor(1,
+            new ScheduledThreadPoolExecutor(2,
                     new NamedThreadFactory("EMS-RENEW"));
 
     volatile boolean running = false;
 
-    private static final int keepAliveTime = 60;
+    private static final int KEEP_ALIVE_TIME = 60;
 
     String clientId;
 
@@ -47,7 +50,9 @@ public class ConsumerClientImpl implements ConsumerClient {
 
     Supplier<Broker> broker;
 
-    private Runnable renew_runnable;
+    private Runnable renewRunnable;
+
+    private ScheduledFuture<?> scheduledFuture;
 
     private StreamAdmin admin;
 
@@ -94,7 +99,7 @@ public class ConsumerClientImpl implements ConsumerClient {
         }
         if (!admin.existGroup(groupName)) {
             if (admin.isAutoCreateTopicOrGroup()) {
-                admin.createGroup(groupName, topicName, GroupType.CLUSTER);
+                admin.createGroup(groupName, topicName, groupType);
             } else {
                 throw new RuntimeException("group 不存在, 且没有配置自动创建 group");
             }
@@ -106,7 +111,7 @@ public class ConsumerClientImpl implements ConsumerClient {
 
         running = true;
         broker = VirtualBrokerFactory.get();
-        renew_runnable = () -> {
+        renewRunnable = () -> {
             try {
                 broker.get().renew(clientId, groupName, topicName);
             } catch (Throwable e) {
@@ -118,7 +123,7 @@ public class ConsumerClientImpl implements ConsumerClient {
             threadNum = systemConfigSupplier.get().consumerThreads();
         }
 
-        mainWorker = new ThreadPoolExecutor(1, 1, keepAliveTime, TimeUnit.SECONDS,
+        mainWorker = new ThreadPoolExecutor(1, 1, KEEP_ALIVE_TIME, TimeUnit.SECONDS,
                 new SynchronousQueue<>(), new MainWorkerThreadFactory(topicName, groupName));
 
         this.clientId = IPv4AddressUtil.get() + "@" + PIDUtil.get() + "@" + UUID.randomUUID().toString().replace("-", "");
@@ -131,7 +136,7 @@ public class ConsumerClientImpl implements ConsumerClient {
         }
 
         log.info("{} start consumer {} {}, thread {}", clientId, groupName, topicName, threadNum);
-        RENEW.scheduleAtFixedRate(renew_runnable, 10, 10, TimeUnit.SECONDS);
+        scheduledFuture = RENEW.scheduleWithFixedDelay(renewRunnable, 10, 10, TimeUnit.SECONDS);
         broker.get().resisterTask(this);
     }
 
@@ -140,7 +145,7 @@ public class ConsumerClientImpl implements ConsumerClient {
         if (running) {
             running = false;
             mainWorker.shutdownNow();
-            RENEW.remove(renew_runnable);
+            scheduledFuture.cancel(true);
             broker.get().down(clientId);
             log.warn("stop consumer {} {}", groupName, topicName);
         }

@@ -22,21 +22,30 @@ kill -9 $pid
 
 echo "kill $pid $path"
 
-echo "开始休眠1..."
+echo "开始休眠..."
+current_datetime=$(date +"%Y-%m-%d %H:%M:%S")
+echo  $current_datetime
+
 sleep 10
 
-echo "结束休眠1.，，."
+current_datetime=$(date +"%Y-%m-%d %H:%M:%S")
+echo  $current_datetime
+echo "结束休眠.，，."
 
 current=$(date +%s)
+
+
 
 # 检查系统类型
 if [ "$os_type" == "Linux" ]; then
     echo "This is Linux."
+    cd /root/ems
 elif [ "$os_type" == "Darwin" ]; then
     echo "This is macOS."
     cd ~/ty60/ems
 else
-    echo "Unsupported operating system."
+    echo "This is " $os_type
+    cd /root/ems
 fi
 
 
@@ -48,3 +57,5 @@ java -jar $path > $current-application.log 2>&1 &
 
 echo "启动完毕....." $path $current-application.log
 
+current_datetime=$(date +"%Y-%m-%d %H:%M:%S")
+echo  $current_datetime

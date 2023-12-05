@@ -2,6 +2,7 @@ package cn.think.github.spi.factory;
 
 import cn.think.github.simple.stream.api.*;
 import cn.think.github.simple.stream.api.spi.Broker;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import cn.think.github.simple.stream.client.api.impl.SimpleProducerImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;

@@ -24,12 +24,4 @@ public interface RetryMsgMapper extends BaseMapper<RetryMsg> {
     @Select("select * from ems_retry_msg where state = 1 and consumer_times < 16 and next_consumer_time <= #{date} " +
             "and group_name = #{group} order by next_consumer_time limit 100")
     List<RetryMsg> selectRetryMsg(@Param("date") Date date, @Param("group") String group);
-
-    /**
-     * 处理中的重试消息, 超时 60s.
-     */
-//    @Select("select * from ems_retry_msg where state = 3  and consumer_times < 16 and (now() - update_time ) > 60 " +
-//            "and next_consumer_time <= #{date} " +
-//            "and group_name = #{group} order by next_consumer_time  limit 100")
-//    List<RetryMsg> selectRetryMsgTimeout(@Param("date") Date date, @Param("group") String group);
 }

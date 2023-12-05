@@ -23,50 +23,25 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class RetryMsgService extends ServiceImpl<RetryMsgMapper, RetryMsg> {
 
-    static M[] arr = new M[]{
-            new M(0, 10),
-            new M(1, 20),
-            new M(2, 30),
-            new M(3, TimeUnit.MINUTES.toSeconds(1)),
-            new M(4, TimeUnit.MINUTES.toSeconds(2)),
-            new M(5, TimeUnit.MINUTES.toSeconds(3)),
-            new M(6, TimeUnit.MINUTES.toSeconds(4)),
-            new M(7, TimeUnit.MINUTES.toSeconds(5)),
-            new M(8, TimeUnit.MINUTES.toSeconds(6)),
-            new M(9, TimeUnit.MINUTES.toSeconds(7)),
-            new M(10, TimeUnit.MINUTES.toSeconds(8)),
-            new M(11, TimeUnit.MINUTES.toSeconds(9)),
-            new M(12, TimeUnit.MINUTES.toSeconds(10)),
-            new M(13, TimeUnit.MINUTES.toSeconds(20)),
-            new M(14, TimeUnit.MINUTES.toSeconds(30)),
-            new M(15, TimeUnit.HOURS.toSeconds(1)),
-            new M(16, TimeUnit.HOURS.toSeconds(2))
+    static M[] ARR = new M[]{
+            null,// 从 1 开始
+            new M(1, 10),
+            new M(2, 20),
+            new M(3, 30),
+            new M(4, TimeUnit.MINUTES.toSeconds(1)),
+            new M(5, TimeUnit.MINUTES.toSeconds(2)),
+            new M(6, TimeUnit.MINUTES.toSeconds(3)),
+            new M(7, TimeUnit.MINUTES.toSeconds(4)),
+            new M(8, TimeUnit.MINUTES.toSeconds(5)),
+            new M(9, TimeUnit.MINUTES.toSeconds(6)),
+            new M(10, TimeUnit.MINUTES.toSeconds(7)),
+            new M(11, TimeUnit.MINUTES.toSeconds(8)),
+            new M(12, TimeUnit.MINUTES.toSeconds(9)),
+            new M(13, TimeUnit.MINUTES.toSeconds(10)),
+            new M(14, TimeUnit.MINUTES.toSeconds(20)),
+            new M(15, TimeUnit.MINUTES.toSeconds(30)),
+            new M(16, TimeUnit.HOURS.toSeconds(1))
     };
-
-    static {
-        Boolean test = Boolean.parseBoolean(System.getProperty("ems.test.env", "false"));
-        if (test) {
-            arr = new M[]{
-                    new M(0, 1),
-                    new M(1, 2),
-                    new M(2, 3),
-                    new M(3, 4),
-                    new M(4, 5),
-                    new M(5, 6),
-                    new M(6, 7),
-                    new M(7, 8),
-                    new M(8, 9),
-                    new M(9, 10),
-                    new M(10, 11),
-                    new M(11, 12),
-                    new M(12, 13),
-                    new M(13, 14),
-                    new M(14, 15),
-                    new M(15, 16),
-                    new M(16, 17)
-            };
-        }
-    }
 
     // 锁住.
     public synchronized int insert(String oldTopic, String newTopic/*"%RETRY%" + group*/, String group, Long offset, int consumerTimes) {
@@ -99,7 +74,7 @@ public class RetryMsgService extends ServiceImpl<RetryMsgMapper, RetryMsg> {
         retryMsg.setRetryTopicName(topic);
         retryMsg.setOffset(offset);
         retryMsg.setGroupName(group);
-        retryMsg.setState(RetryMsg.STATA_INIT);
+        retryMsg.setState(RetryMsg.STATE_INIT);
         retryMsg.setConsumerTimes(consumerTimes);
         retryMsg.setNextConsumerTime(getNext(consumerTimes));
         retryMsg.setUpdateTime(new Date());
@@ -110,7 +85,7 @@ public class RetryMsgService extends ServiceImpl<RetryMsgMapper, RetryMsg> {
     }
 
     private Date getNext(int consumerTimes) {
-        long timeInSec = arr[consumerTimes].getTimeInSec();
+        long timeInSec = ARR[consumerTimes].getTimeInSec();
         return new Date(System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(timeInSec));
     }
 

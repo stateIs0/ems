@@ -1,7 +1,7 @@
 package cn.think.github.simple.stream.mybatis.plus.impl.lock;
 
 import cn.think.github.simple.stream.api.spi.StreamLock;
-import cn.think.github.spi.factory.SpiFactory;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 
 /**
  * @version 1.0

@@ -46,7 +46,7 @@ public class Cache {
         return null;
     }
 
-    public long increment(String key, int num) {
+    public long increment(String key, long num) {
         BoundValueOperations<String, String> v = redisTemplate.boundValueOps(key);
         Long increment = v.increment(num);
         if (increment != null) {

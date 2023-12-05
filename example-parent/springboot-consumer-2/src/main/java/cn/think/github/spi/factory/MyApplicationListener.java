@@ -4,6 +4,7 @@ import cn.think.github.dal.RunningLog;
 import cn.think.github.dal.RunningLogService;
 import cn.think.github.simple.stream.api.*;
 import cn.think.github.simple.stream.api.spi.Broker;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import cn.think.github.simple.stream.client.api.impl.SimpleConsumerImpl;
 import com.alibaba.csp.sentinel.Entry;
 import com.alibaba.csp.sentinel.SphU;
@@ -12,6 +13,7 @@ import com.alibaba.csp.sentinel.slots.block.RuleConstant;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.Redisson;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Service;
@@ -19,7 +21,6 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import java.util.function.Supplier;
 
 
@@ -41,6 +42,8 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
     Broker broker;
     @Resource
     RunningLogService runningLogService;
+    @Resource
+    Redisson redisson;
 
     public void main() {
 
@@ -59,35 +62,9 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         consumer.register(msgs -> {
             try (Entry ignored = SphU.entry("Group")) {
                 Msg m = msgs.get(0);
-                boolean b = new Random().nextInt(5000) % 1000 == 0;
-//                boolean b = false;
-                if (m.getRealTopic().contains("RETRY")) {
-                    log.warn("重试消息......topic={}, times={}, id={}",
-                            m.getRealTopic(), m.getConsumerTimes(), m.getMsgId());
-                    if (m.getConsumerTimes() == 15) {
-                        RunningLog runningLog = new RunningLog();
-                        runningLog.setTopicName(topic);
-                        runningLog.setConsumerTimes(m.getConsumerTimes());
-                        runningLog.setGroupName(group);
-                        runningLog.setOffset(m.getMsgId());
-//                        runningLogService.save(runningLog);
-                        return ConsumerResult.success();
-                    }
-                    return ConsumerResult.fail();
-                }
-                if (!b) {
-                    RunningLog runningLog = new RunningLog();
-                    runningLog.setTopicName(topic);
-                    runningLog.setConsumerTimes(m.getConsumerTimes());
-                    runningLog.setGroupName(group);
-                    runningLog.setOffset(m.getMsgId());
-//                    runningLogService.save(runningLog);
-                    log.info("msg id =[{}]", m.getMsgId());
-                    return ConsumerResult.success();
-                } else {
-                    log.warn("开始重试 ----->>>> {} {}", m.getRealTopic(), m.getMsgId());
-                    return ConsumerResult.fail();
-                }
+                save(topic, m, group);
+                //log.info("msg id =[{}]", m.getMsgId());
+                return ConsumerResult.success();
             } catch (BlockException ex) {
                 System.out.println("blocked!");
                 return ConsumerResult.fail();
@@ -99,6 +76,18 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         consumer.start();
 
 
+    }
+
+    private void save(String topic, Msg m, String group) {
+        System.out.println(m);
+        RunningLog runningLog = new RunningLog();
+        runningLog.setTopicName(topic);
+        runningLog.setConsumerTimes(m.getConsumerTimes());
+        runningLog.setGroupName(group);
+        runningLog.setOffset(m.getMsgId());
+        runningLogService.save(runningLog);
+//        RAtomicLong atomicLong = redisson.getAtomicLong("hello");
+//        atomicLong.incrementAndGet();
     }
 
     private static void initFlowRules() {

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.List;
 
-import static cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.RetryMsg.STATA_SUCCESS;
+import static cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.RetryMsg.STATE_SUCCESS;
 
 /**
  * @version 1.0
@@ -25,6 +25,8 @@ import static cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.Ret
 @Slf4j
 @Service
 public class RetryMsgWriteProcess {
+
+    public static final String RETRY_TOPIC_KEY_WORD = "%RETRY%";
 
     @Resource
     private DeadMsgService deadMsgService;
@@ -42,7 +44,7 @@ public class RetryMsgWriteProcess {
         return true;
     }
 
-    public boolean saveRetry(Msg msg, String group) {
+    public void saveRetry(Msg msg, String group) {
         // "%RETRY%" + group
         String realTopic = msg.getRealTopic();
         // TopicA
@@ -50,34 +52,29 @@ public class RetryMsgWriteProcess {
         // 进入重试队列 or 死信队列
         int consumerTimes = msg.getConsumerTimes();
 
-        return saveRetry(realTopic, oldTopic, consumerTimes, group, msg.getOffset());
+        saveRetry(realTopic, oldTopic, consumerTimes, group, msg.getOffset());
     }
 
-    public boolean saveRetry(String topic, String oldTopic, int consumerTimes, String group, Long offset) {
+    public void saveRetry(String topic, String oldTopic, int consumerTimes, String group, Long offset) {
         // "%RETRY%" + group
         // 进入重试队列 or 死信队列
         if (!isRetryTopic(topic)) {
-            try {
-                return retryMsgService.insert(topic,
-                        buildRetryTopic(group), group, offset, 0) > 0;
-            } catch (Exception e) {
-                throw e;
-            }
+            retryMsgService.insert(topic, buildRetryTopic(group), group, offset, 1);
+            return;
         }
-        int times = emsSystemConfig.consumerRetryMaxTimes();
-        if (consumerTimes >= times) {
+        int consumerRetryMaxTimes = emsSystemConfig.consumerRetryMaxTimes();
+        if (consumerTimes >= consumerRetryMaxTimes) {
             // 死信
-            deadMsgService.save(oldTopic, group, String.valueOf(offset), consumerTimes);
+            deadMsgService.save(oldTopic, group, String.valueOf(offset), consumerTimes + 1);
         }
         retryMsgService.update0(topic, group, offset, consumerTimes + 1);
-        return true;
     }
 
     public List<SimpleMsgWrapper> getRetryMsgList(String topicName, String g) {
         return retryMsgQueue.getRetryMsgList(topicName, g);
     }
 
-    public boolean ackSuccessRetryMsgList(List<Msg> list) {
+    public void ackSuccessRetryMsgList(List<Msg> list) {
         for (Msg msg : list) {
             long offset = msg.getOffset();
             String topic = msg.getRealTopic();
@@ -92,19 +89,18 @@ public class RetryMsgWriteProcess {
                 continue;
             }
             for (RetryMsg retryMsg : retryMsgList) {
-                retryMsg.setState(STATA_SUCCESS);
+                retryMsg.setState(STATE_SUCCESS);
                 retryMsgMapper.updateById(retryMsg);
             }
         }
-        return true;
     }
 
     public boolean isRetryTopic(String topic) {
-        return topic.contains("%RETRY%");
+        return topic.contains(RETRY_TOPIC_KEY_WORD);
     }
 
     public String buildRetryTopic(String group) {
-        return "%RETRY%" + group;
+        return RETRY_TOPIC_KEY_WORD + group;
     }
 
 }

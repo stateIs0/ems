@@ -6,7 +6,6 @@ import cn.think.github.simple.stream.mybatis.plus.impl.QuartzStdScheduler;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.GroupClientTable;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.RetryMsg;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.TopicGroupLog;
-import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.base.BaseDO;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.GroupClientTableMapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.RetryMsgMapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.TopicGroupLogMapper;
@@ -16,12 +15,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.TopicGroupLog.STATE_RETRY;
 import static cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.TopicGroupLog.STATE_START;
@@ -48,6 +51,8 @@ public class ClientTimeoutCheckerImpl implements ClientTimeoutChecker, LifeCycle
     TopicGroupLogMapper logMapper;
     @Resource
     QuartzStdScheduler quartzStdScheduler;
+    @Value("${ems.consumer.timeout.inMin:5}")
+    String emsConsumerTimeoutInMin;
 
 
     @PostConstruct
@@ -60,19 +65,23 @@ public class ClientTimeoutCheckerImpl implements ClientTimeoutChecker, LifeCycle
         try {
             List<GroupClientTable> groupClientTables = mapper.selectList(new LambdaQueryWrapper<>());
 
+            List<GroupClientTable> badList = new ArrayList<>();
+
             for (GroupClientTable table : groupClientTables) {
                 long time = table.getRenewTime().getTime();
                 long now = System.currentTimeMillis();
                 // 30s 断开续约
-                if (now - time > TimeUnit.SECONDS.toMillis(30)
+                if (now - time > TimeUnit.SECONDS.toMillis(60)
                         || table.getState() == GroupClientTable.state_down) {
                     log.warn("超时 or 下线 client ..... {}, state = {}", table.getClientId(), table.getState());
                     normalLogProcess(table);
                     retryLogProcess(table);
+                    badList.add(table);
                     // bad
                     delete(table);
                 }
             }
+            normalLogProcess(badList);
         } catch (Throwable throwable) {
             log.warn(throwable.getMessage(), throwable);
         }
@@ -81,7 +90,7 @@ public class ClientTimeoutCheckerImpl implements ClientTimeoutChecker, LifeCycle
     private void retryLogProcess(GroupClientTable table) {
         // 将这个 client 的重试消息更新状态.
         List<RetryMsg> retryMsgs = retryMsgMapper.selectList(new LambdaQueryWrapper<RetryMsg>()
-                .eq(RetryMsg::getState, STATE_RETRY)
+                .eq(RetryMsg::getState, RetryMsg.STATE_PROCESSING)
                 .eq(RetryMsg::getClientId, table.getClientId()));
 
         if (!retryMsgs.isEmpty()) {
@@ -94,6 +103,28 @@ public class ClientTimeoutCheckerImpl implements ClientTimeoutChecker, LifeCycle
         }
     }
 
+    private void normalLogProcess(List<GroupClientTable> groupClientTables) {
+        // 将超过 30 分钟没有消费的消息, 投递到重试队列
+        List<TopicGroupLog> topicGroupLogs;
+        if (groupClientTables.isEmpty()) {
+            topicGroupLogs = logMapper.selectList(new LambdaQueryWrapper<TopicGroupLog>()
+                    .eq(TopicGroupLog::getState, STATE_START)
+                    .lt(TopicGroupLog::getCreateTime, new Date(System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(Integer.parseInt(emsConsumerTimeoutInMin)))));
+        } else {
+            topicGroupLogs = logMapper.selectList(new LambdaQueryWrapper<TopicGroupLog>()
+                    .eq(TopicGroupLog::getState, STATE_START)
+                    .lt(TopicGroupLog::getCreateTime, new Date(System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(Integer.parseInt(emsConsumerTimeoutInMin))))
+                    .notIn(TopicGroupLog::getClientId, groupClientTables.stream().map(GroupClientTable::getClientId).collect(Collectors.toList())));
+        }
+
+
+        if (!topicGroupLogs.isEmpty()) {
+            log.info("捞取 log 超时消费消息 {} 条", topicGroupLogs.size());
+        }
+
+        SaveAndUpdate(topicGroupLogs);
+    }
+
     private void normalLogProcess(GroupClientTable table) {
         // 将这个 client 的未成功消息投递到重试队列
         List<TopicGroupLog> topicGroupLogs = logMapper.selectList(new LambdaQueryWrapper<TopicGroupLog>()
@@ -104,9 +135,16 @@ public class ClientTimeoutCheckerImpl implements ClientTimeoutChecker, LifeCycle
             log.info("client {} 过期, 捞取 log 超时消费消息 {} 条", table.getClientId(), topicGroupLogs.size());
         }
 
+        SaveAndUpdate(topicGroupLogs);
+    }
+
+    private void SaveAndUpdate(List<TopicGroupLog> topicGroupLogs) {
         for (TopicGroupLog topicGroupLog : topicGroupLogs) {
             retryMsgHandler.saveRetry(topicGroupLog.getTopicName(), topicGroupLog.getTopicName(),
                     0, topicGroupLog.getGroupName(), topicGroupLog.getPhysicsOffset());
+            topicGroupLog.setState(STATE_RETRY);
+            topicGroupLog.setUpdateTime(new Date());
+            logMapper.updateById(topicGroupLog);
         }
     }
 

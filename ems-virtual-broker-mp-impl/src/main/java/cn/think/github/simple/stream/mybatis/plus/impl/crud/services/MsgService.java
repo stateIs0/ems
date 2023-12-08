@@ -15,7 +15,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -25,7 +24,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-import static cn.think.github.simple.stream.mybatis.plus.impl.util.RedisKeyFixString.EMS_JUST_PRODUCED_CACHE;
+import static cn.think.github.simple.stream.mybatis.plus.impl.util.RedisKeyFixString.EMS_TOPIC_INCR_KEY;
 
 /**
  * @version 1.0
@@ -45,9 +44,6 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
     @Resource
     JsonUtil jsonUtil;
 
-    @Value("${ems.send.opt.max.id.type:cache}")
-    String emsSendMaxOptType;
-
     public Long getMsgMaxOffset(String topic) {
         String offset = redisClient.get(buildMsgMaxOffsetRedisKey(topic));
         if (StringUtil.isNotEmpty(offset)) {
@@ -64,19 +60,6 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
         return simpleMsg.getPhysicsOffset();
     }
 
-    private void flagJustProduced(String topic) {
-        redisClient.set(String.format(EMS_JUST_PRODUCED_CACHE, topic), Boolean.toString(true), 3, TimeUnit.SECONDS);
-    }
-
-    /**
-     * 是否刚刚产生消息,
-     * @param topic  topic
-     * @return true 3s 刚刚产生了消息
-     */
-    public boolean justProduced(String topic) {
-        return Boolean.parseBoolean(redisClient.get(String.format(EMS_JUST_PRODUCED_CACHE, topic)));
-    }
-
     public Long getMin(String t) {
         return baseMapper.selectOne(new LambdaQueryWrapper<SimpleMsg>()
                 .eq(SimpleMsg::getTopicName, t)
@@ -84,29 +67,24 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
                 .last("limit 1")).getPhysicsOffset();
     }
 
-    public String insert(Msg msg) {
-        long msgId = getMaxFromCacheWithInsert(msg);
+    public String insert(Msg msg, int timeout) {
+        long msgId = getMaxFromCacheWithInsert(msg, timeout);
         // save offset record for consumer.
         // 这里有可能设置的并不是最大的 offset, 但是不想上锁; 30s 缓存失效兜底兜底.
         redisClient.set(buildMsgMaxOffsetRedisKey(msg.getTopic()),
                 String.valueOf(msgId),
                 30, TimeUnit.SECONDS);
 
-        // 标记此时刚刚产生了消息, 防止消费者误判.
-        if (msgId == 1) {
-            this.flagJustProduced(msg.getTopic());
-        }
-
         return String.valueOf(msgId);
     }
 
-    protected long getMaxFromCacheWithInsert(Msg msg) {
+    protected long getMaxFromCacheWithInsert(Msg msg, int timeout) {
 
         RedisClient.AtomicLong rAtomicLong = memoryCache.get(msg.getTopic());
         if (rAtomicLong == null) {
             synchronized (this) {
                 if ((rAtomicLong = memoryCache.get(msg.getTopic())) == null) {
-                    rAtomicLong = redisClient.getAtomicLong(msg.getTopic());
+                    rAtomicLong = redisClient.getAtomicLong(String.format(EMS_TOPIC_INCR_KEY, msg.getTopic()));
                     memoryCache.put(msg.getTopic(), rAtomicLong);
                 }
             }
@@ -116,9 +94,7 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
             Long msgMax = getMsgMax(msg.getTopic());
             if (msgMax != 0) {
                 // redis 可能挂了; 那从数据库里插入, 并获取最新的数据;
-                long withInsert = getMaxFromStoreWithInsert(msg);
-                rAtomicLong.incrementAndGet(withInsert);
-                return withInsert;
+                return this.getMaxFromStoreWithInsert(msg, timeout);
             }
         }
 
@@ -148,7 +124,7 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
     }
 
 
-    public long getMaxFromStoreWithInsert(Msg msg) {
+    public long getMaxFromStoreWithInsert(Msg msg, int timeout) {
 
         String key = LockKeyFixString.saveMsgKey(msg.getTopic());
 
@@ -171,9 +147,12 @@ public class MsgService extends ServiceImpl<SimpleMsgMapper, SimpleMsg> {
                 SimpleMsg simpleMsg = getSimpleMsg(msg, newOffset);
                 // 插入消息.
                 baseMapper.insert(simpleMsg);
-
+                RedisClient.AtomicLong atomicLong = memoryCache.get(msg.getTopic());
+                if (atomicLong.get() < newOffset.floatValue()) {
+                    atomicLong.incrementAndGet(newOffset - atomicLong.get());
+                }
                 return newOffset;
-            }, key, 30);
+            }, key, timeout);
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }

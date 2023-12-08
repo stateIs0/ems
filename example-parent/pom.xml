@@ -20,6 +20,7 @@
         <module>springboot-consumer-1</module>
         <module>springboot-consumer-2</module>
         <module>springboot-consumer-3</module>
+        <module>springboot-consumer-producer</module>
         <module>springboot-producer-1</module>
         <module>springboot-producer-2</module>
         <module>springboot-retry-test</module>

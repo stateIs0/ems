@@ -15,6 +15,7 @@
         <module>ems-redis-openSource-impl</module>
         <module>ems-springboot2-openSource-starter</module>
         <module>ems-virtual-broker-mp-impl</module>
+
         <module>example-parent</module>
         <module>example-parent/dispatcher</module>
     </modules>

@@ -18,11 +18,7 @@ public interface RedisKeyFixString {
      */
     String TOPIC_MAX_OFFSET_CACHE = "EMS_MAX_OFFSET_%s";
 
-    /**
-     * 刚刚产生消息的 flag;
-     */
-    String EMS_JUST_PRODUCED_CACHE = "EMS_JUST_PRODUCED_%s";
-
+    String EMS_TOPIC_INCR_KEY = "EMS_TOPIC_INCR_KEY_%s";
     /**
      * 操作这个 topic 和 group 的 lock key
      */

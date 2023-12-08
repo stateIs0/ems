@@ -2,6 +2,7 @@ package cn.think.github.simple.stream.redis.openSource.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.BoundValueOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
@@ -15,21 +16,27 @@ import java.util.concurrent.TimeUnit;
  * @Description
  * @date 2023/10/19
  **/
+@Slf4j
 @Component
 public class Cache {
 
     @Resource
-    RedisTemplate<String, String> redisTemplate;
+    private RedisTemplate<String, String> redisTemplate;
 
     @Resource
-    ObjectMapper objectMapper;
+    private ObjectMapper objectMapper;
 
     public void set(String key, String value, int num, TimeUnit timeUnit) {
         redisTemplate.boundValueOps(key).set(value, num, timeUnit);
     }
 
     public <T> T get(String key, Class<T> c) {
-        Object v = redisTemplate.boundValueOps(key).get();
+        Object v = null;
+        try {
+            v = redisTemplate.boundValueOps(key).get();
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+        }
         if (v == null) {
             return (T) v;
         }
@@ -53,5 +60,11 @@ public class Cache {
             return increment;
         }
         return 0;
+    }
+
+    public void set(String key, long n) {
+
+        BoundValueOperations<String, String> v = redisTemplate.boundValueOps(key);
+        v.set(key, n);
     }
 }

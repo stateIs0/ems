@@ -182,11 +182,6 @@ public class ClientTimeoutCheckerImpl implements ClientTimeoutChecker, LifeCycle
     }
 
     @Override
-    public void stop() {
-
-    }
-
-    @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
         checkAndClean();
     }

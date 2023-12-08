@@ -9,7 +9,7 @@ public class RocketMQProducer {
         // 设置生产者组名
         DefaultMQProducer producer = new DefaultMQProducer("your_producer_group");
         // 设置 NameServer 地址，多个地址用分号分隔
-        producer.setNamesrvAddr("localhost:9876");
+        producer.setNamesrvAddr("172.20.62.133:9876");
         // 启动生产者
         producer.start();
 

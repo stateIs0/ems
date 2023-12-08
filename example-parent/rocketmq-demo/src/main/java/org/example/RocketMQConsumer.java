@@ -13,7 +13,7 @@ public class RocketMQConsumer {
         // 设置消费者组名
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("AAA_G");
         // 设置 NameServer 地址，多个地址用分号分隔
-        consumer.setNamesrvAddr("localhost:9876");
+        consumer.setNamesrvAddr("172.20.62.133:9876");
         // 订阅消息，参数分别是 topic 和 tag，* 表示订阅所有消息
         consumer.subscribe("AAA_T", "*");
 

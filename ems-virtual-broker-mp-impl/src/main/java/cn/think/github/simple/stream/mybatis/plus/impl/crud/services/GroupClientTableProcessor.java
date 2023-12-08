@@ -20,7 +20,7 @@ import java.util.List;
  **/
 @Slf4j
 @Service
-public class GroupClientTableService extends ServiceImpl<GroupClientTableMapper, GroupClientTable> {
+public class GroupClientTableProcessor extends ServiceImpl<GroupClientTableMapper, GroupClientTable> {
 
     @Resource
     GroupClientTableMapper groupClientTableMapper;

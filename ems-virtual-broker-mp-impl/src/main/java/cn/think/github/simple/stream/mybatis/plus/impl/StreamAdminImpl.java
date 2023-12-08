@@ -7,7 +7,7 @@ import cn.think.github.simple.stream.api.monitor.MonitorClient;
 import cn.think.github.simple.stream.api.monitor.MonitorGroup;
 import cn.think.github.simple.stream.api.monitor.MonitorTopic;
 import cn.think.github.simple.stream.api.simple.util.TopicConstant;
-import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.GroupClientTableService;
+import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.GroupClientTableProcessor;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.LogService;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.MsgService;
 import cn.think.github.simple.stream.mybatis.plus.impl.lock.LockFactory;
@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -40,7 +41,7 @@ public class StreamAdminImpl implements StreamAdmin {
     @Resource
     LogService logService;
     @Resource
-    GroupClientTableService clientTableService;
+    GroupClientTableProcessor clientTableService;
     @Resource
     MsgService msgService;
     @Resource
@@ -50,7 +51,7 @@ public class StreamAdminImpl implements StreamAdmin {
     public boolean isBroadcast(String groupName) {
         SimpleGroup simpleGroup = groupMapper.selectOne(new LambdaQueryWrapper<SimpleGroup>().eq(SimpleGroup::getGroupName, groupName));
         if (simpleGroup == null) {
-            throw new RuntimeException("simpleGroup 错误, 不存在. " + groupName);
+            throw new RuntimeException("ems tip ---> simpleGroup 错误, 不存在. " + groupName);
         }
         String groupType = simpleGroup.getGroupType();
         return groupType.equals(SimpleGroup.GROUP_TYPE_BROADCASTING);
@@ -79,9 +80,28 @@ public class StreamAdminImpl implements StreamAdmin {
     }
 
     @Override
+    public boolean reviewSubRelation(String topic, String group) {
+        List<SimpleGroup> groups = groupMapper.selectList(new QueryWrapper<SimpleGroup>().lambda()
+                .eq(SimpleGroup::getGroupName, group));
+        // 空的, 不合法
+        if (groups.isEmpty()) {
+            log.warn("ems tip ---> groups is isEmpty {}", group);
+            return false;
+        }
+        Optional<SimpleGroup> first = groups.stream().findFirst();
+        // 数据库的 topicName 和实际订阅的 topic name 不一致, 不合法.
+        Optional<String> topicDb = first.map(SimpleGroup::getTopicName);
+        Optional<Boolean> optional = first.map(a -> a.getTopicName().equals(topic));
+        if (!optional.get()) {
+            log.warn("ems tip ---> group {}, db topic {}, sub topic {}", group, topicDb.orElse(null), topic);
+        }
+        return optional.get();
+    }
+
+    @Override
     public boolean createTopic(String topic, int type) {
         if (existTopic(topic)) {
-            log.info("topic exist {}", topic);
+            log.info("ems tip ---> topic exist {}", topic);
             return false;
         }
         SimpleTopic simpleTopic = new SimpleTopic();
@@ -96,7 +116,7 @@ public class StreamAdminImpl implements StreamAdmin {
             log.warn(e.getMessage(), e);
             return false;
         }
-        log.warn("create topic {} success", topic);
+        log.warn("ems tip ---> create topic {} success", topic);
         return true;
     }
 
@@ -118,7 +138,7 @@ public class StreamAdminImpl implements StreamAdmin {
     @Override
     public boolean createGroup(String groupName, String topicName, GroupType groupType) {
         if (existGroup(groupName)) {
-            log.info("group exist {}", groupName);
+            log.info("ems tip ---> group exist {}", groupName);
             return false;
         }
         SimpleGroup s = new SimpleGroup();
@@ -134,7 +154,7 @@ public class StreamAdminImpl implements StreamAdmin {
     @Override
     public boolean deleteTopic(String topic) {
         if (!existTopic(topic)) {
-            log.info("topic exist {}", topic);
+            log.info("ems tip ---> topic exist {}", topic);
             return false;
         }
         int delete = topicMapper.delete(new QueryWrapper<SimpleTopic>().lambda().eq(SimpleTopic::getTopicName, topic));
@@ -144,7 +164,7 @@ public class StreamAdminImpl implements StreamAdmin {
     @Override
     public boolean deleteGroup(String group) {
         if (!existTopic(group)) {
-            log.info("group exist {}", group);
+            log.info("ems tip ---> group exist {}", group);
             return false;
         }
         int delete = groupMapper.delete(new QueryWrapper<SimpleGroup>().lambda().eq(SimpleGroup::getGroupName, group));
@@ -167,7 +187,7 @@ public class StreamAdminImpl implements StreamAdmin {
                     }
                     int r = logService.updateOffset(group, offset);
                     logService.setMaxLogOffset(topic, group, offset);
-                    log.warn("重置 topic {} group {} offset {}, 当前最大 {}, 结果 = {}",
+                    log.warn("ems tip ---> 重置 topic {} group {} offset {}, 当前最大 {}, 结果 = {}",
                             topic, group, offset, maxLog, r > 0);
                     return null;
                 }, groupOpKey, 10);

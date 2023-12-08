@@ -21,13 +21,4 @@ public class SimpleProducerImpl implements SimpleProducer {
         return producerClient.saveMsg(msg);
     }
 
-    @Override
-    public void start() {
-        producerClient.start();
-    }
-
-    @Override
-    public void stop() {
-        producerClient.stop();
-    }
 }

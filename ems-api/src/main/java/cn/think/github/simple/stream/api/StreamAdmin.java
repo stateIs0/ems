@@ -37,6 +37,8 @@ public interface StreamAdmin {
 
     boolean existGroup(String group);
 
+    boolean reviewSubRelation(String topic, String group);
+
     boolean createGroup(String groupName, String topicName, GroupType groupType);
 
     boolean deleteGroup(String group);

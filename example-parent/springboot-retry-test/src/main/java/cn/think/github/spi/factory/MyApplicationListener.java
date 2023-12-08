@@ -47,8 +47,8 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
     @Resource
     Broker broker;
 
-    String topic = "TopicA";
-    String group = "Group1";
+    String topic = "TopicA1928";
+    String group = "Group15-33";
 
     public void main() {
 
@@ -63,7 +63,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         SimpleProducer producer = new SimpleProducerImpl();
         producer.start();
 
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 1; i++) {
             SendResult send = producer.send(Msg.builder().topic(topic).body("hello-world ")
                     .properties(new Properties())
                     .tags("aaa tag")
@@ -87,11 +87,6 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
                 log.info("retry --------->>> {} {} {}", atomicLong.incrementAndGet(), TimeUnit.MILLISECONDS.toSeconds(l), m.getConsumerTimes());
                 Thread.sleep(100);
             } catch (Throwable ignore) {
-                try {
-                    Thread.sleep(10000);
-                } catch (InterruptedException e) {
-                    //
-                }
                 throw new RuntimeException(ignore);
             }
             preTime[0] = System.currentTimeMillis();

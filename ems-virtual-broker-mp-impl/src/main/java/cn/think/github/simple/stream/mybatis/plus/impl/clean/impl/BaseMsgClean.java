@@ -25,7 +25,7 @@ public abstract class BaseMsgClean implements LifeCycle, Job {
     protected QuartzStdScheduler quartzStdScheduler;
 
     @PostConstruct
-    public void init_() {
+    public void init() {
         broker.resisterTask(this);
     }
 
@@ -40,9 +40,4 @@ public abstract class BaseMsgClean implements LifeCycle, Job {
      * 0 0 4 * * ? 每天凌晨 4 点
      */
     public abstract String corn();
-
-
-    @Override
-    public void stop() {
-    }
 }

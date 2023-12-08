@@ -104,6 +104,11 @@ public class ConsumerClientImpl implements ConsumerClient {
                 throw new RuntimeException("group 不存在, 且没有配置自动创建 group");
             }
         }
+
+        if (!admin.reviewSubRelation(topicName, groupName)) {
+            throw new RuntimeException(String.format("group = %s 和 topic = %s 订阅关系不合法.", groupName, topicName));
+        }
+
         if (admin.getTopicRule(topicName) >= TopicConstant.RULE_DENY) {
             log.warn("当前 topic 禁止读写, {}", topicName);
             return;
@@ -135,7 +140,7 @@ public class ConsumerClientImpl implements ConsumerClient {
             mainWorker.execute(new ClusterConsumerRunner(this, clientId, threadNum));
         }
 
-        log.info("{} start consumer {} {}, thread {}", clientId, groupName, topicName, threadNum);
+        log.info("ems start consumer [{}] [{}] [{}], thread [{}]", clientId, groupName, topicName, threadNum);
         scheduledFuture = RENEW.scheduleWithFixedDelay(renewRunnable, 10, 10, TimeUnit.SECONDS);
         broker.get().resisterTask(this);
     }

@@ -28,14 +28,6 @@ public class RetryMsgQueue {
         return topic + "#" + group;
     }
 
-    public boolean haveNewMsg(String topicName, String groupName) {
-        LinkedBlockingQueue<SimpleMsgWrapper> simpleMsgQueue = queueMaps.get(buildKey(topicName, groupName));
-        if (simpleMsgQueue == null) {
-            return false;
-        }
-        return !simpleMsgQueue.isEmpty();
-    }
-
     public List<SimpleMsgWrapper> getRetryMsgList(String topicName, String groupName) {
         final LinkedBlockingQueue<SimpleMsgWrapper> simpleMsgQueue = queueMaps.get(buildKey(topicName, groupName));
         if (simpleMsgQueue == null) {

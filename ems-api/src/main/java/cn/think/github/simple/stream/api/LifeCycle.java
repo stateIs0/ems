@@ -8,7 +8,10 @@ package cn.think.github.simple.stream.api;
  **/
 public interface LifeCycle {
 
-    void start();
+    default void start() {
+    }
 
-    void stop();
+    default void stop() {
+    }
+
 }

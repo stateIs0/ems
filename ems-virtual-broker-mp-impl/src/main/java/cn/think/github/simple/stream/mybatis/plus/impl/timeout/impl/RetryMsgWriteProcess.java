@@ -70,8 +70,8 @@ public class RetryMsgWriteProcess {
         retryMsgService.update0(topic, group, offset, consumerTimes + 1);
     }
 
-    public List<SimpleMsgWrapper> getRetryMsgList(String topicName, String g) {
-        return retryMsgQueue.getRetryMsgList(topicName, g);
+    public List<SimpleMsgWrapper> getRetryMsgList(String topicName, String groupName) {
+        return retryMsgQueue.getRetryMsgList(topicName, groupName);
     }
 
     public void ackSuccessRetryMsgList(List<Msg> list) {

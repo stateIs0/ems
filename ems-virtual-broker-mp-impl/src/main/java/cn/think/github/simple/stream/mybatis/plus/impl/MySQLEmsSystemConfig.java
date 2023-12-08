@@ -34,7 +34,7 @@ public class MySQLEmsSystemConfig {
         SimpleStreamSystemConfig systemConfig = mapper.selectOne(new LambdaQueryWrapper<SimpleStreamSystemConfig>()
                 .eq(SimpleStreamSystemConfig::getSimpleKey, "msgMaxSizeInBytes")
                 .eq(SimpleStreamSystemConfig::getDeleted, DELETED_EXIST));
-        return systemConfig == null ? 1028 * 1024 * 4 : Integer.parseInt(systemConfig.getSimpleValue());
+        return systemConfig == null ? 1024 * 1024 * 4 : Integer.parseInt(systemConfig.getSimpleValue());
     }
 
     public int consumerBatchSize() {

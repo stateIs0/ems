@@ -6,9 +6,9 @@ import cn.think.github.simple.stream.api.SendResult;
 import cn.think.github.simple.stream.api.StreamAdmin;
 import cn.think.github.simple.stream.api.simple.util.TopicConstant;
 import cn.think.github.simple.stream.api.spi.Broker;
+import cn.think.github.simple.stream.api.util.SpiFactory;
 import cn.think.github.simple.stream.client.VirtualBrokerFactory;
 import cn.think.github.simple.stream.client.support.ProducerClient;
-import cn.think.github.simple.stream.api.util.SpiFactory;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
@@ -47,6 +47,9 @@ public class ProducerClientImpl implements ProducerClient {
     }
 
     private SendResult check(Msg msg) {
+        if (msg.getTopic() == null) {
+            throw new RuntimeException("topic 不能是空 ");
+        }
         // 检查 topic 是否存在.
         if (!exitsTopicSet.contains(msg.getTopic())) {
             if (!admin.existTopic(msg.getTopic())) {
@@ -76,6 +79,7 @@ public class ProducerClientImpl implements ProducerClient {
                 throw new RuntimeException("消息超过指定大小 " + max);
             }
         }
+
         return null;
     }
 
@@ -101,14 +105,5 @@ public class ProducerClientImpl implements ProducerClient {
                 }
             }
         }
-    }
-
-    @Override
-    public void start() {
-
-    }
-
-    @Override
-    public void stop() {
     }
 }

@@ -22,5 +22,10 @@ ems:
   enabled: true
   redisson:
     url: redis://localhost:6379
+
 server:
-  port: 9090
+  port: 9098
+
+logging:
+  level:
+    cn.think.github: info

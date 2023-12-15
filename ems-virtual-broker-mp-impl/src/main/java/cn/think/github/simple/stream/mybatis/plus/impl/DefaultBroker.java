@@ -86,11 +86,11 @@ public class DefaultBroker implements Broker {
     }
 
     @Override
-    public boolean ack(List<Msg> list, String group, String clientId, int timeoutInSec) {
+    public boolean ack(List<Msg> list, String group, String clientId, int ignore) {
         if (notStart()) {
             start();
         }
-        return brokerPullProcessor.ack(list, group, clientId, timeoutInSec);
+        return brokerPullProcessor.ack(list, group, clientId);
     }
 
 

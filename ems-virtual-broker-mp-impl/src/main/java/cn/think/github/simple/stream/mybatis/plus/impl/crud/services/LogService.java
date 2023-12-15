@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +35,24 @@ public class LogService extends ServiceImpl<TopicGroupLogMapper, TopicGroupLog> 
 
     public void setMaxLogOffset(String topic, String group, long offset) {
         redisClient.set(buildMaxLogOffsetKey(topic, group), String.valueOf(offset), 30, TimeUnit.SECONDS);
+    }
+
+    public synchronized void generateEmptyConsumerLog(String topic, String group, long offset, String clientId) {
+        // redis
+        this.setMaxLogOffset(topic, group, offset);
+        // db
+        List<TopicGroupLog> list = new ArrayList<>();
+        TopicGroupLog topicGroupLog = new TopicGroupLog();
+        topicGroupLog.setGroupName(group);
+        topicGroupLog.setTopicName(topic);
+        topicGroupLog.setState(TopicGroupLog.STATE_DONE);
+        topicGroupLog.setPhysicsOffset(offset);
+        topicGroupLog.setClientId(clientId);
+        topicGroupLog.setErrorMsg("empty_log");
+        topicGroupLog.setCreateTime(new Date());
+        topicGroupLog.setUpdateTime(new Date());
+        list.add(topicGroupLog);
+        this.saveBatch(list);
     }
 
     public Long getLogMaxOffset(String t, String g) {
@@ -70,7 +89,7 @@ public class LogService extends ServiceImpl<TopicGroupLogMapper, TopicGroupLog> 
         topicGroupLog.setPhysicsOffset(offset);
         topicGroupLog.setUpdateTime(new Date());
 
-        return baseMapper.update(topicGroupLog, new LambdaQueryWrapper<TopicGroupLog>().eq(TopicGroupLog::getGroupName, group));
+        return topicGroupLogMapper.update(topicGroupLog, new LambdaQueryWrapper<TopicGroupLog>().eq(TopicGroupLog::getGroupName, group));
     }
 
 
@@ -81,7 +100,7 @@ public class LogService extends ServiceImpl<TopicGroupLogMapper, TopicGroupLog> 
         TopicGroupLog l = new TopicGroupLog();
         l.setUpdateTime(new Date());
         l.setState(state);
-        baseMapper.update(l, new LambdaQueryWrapper<TopicGroupLog>()
+        topicGroupLogMapper.update(l, new LambdaQueryWrapper<TopicGroupLog>()
                 .eq(TopicGroupLog::getTopicName, t)
                 .eq(TopicGroupLog::getGroupName, group)
                 .eq(TopicGroupLog::getClientId, clientId)

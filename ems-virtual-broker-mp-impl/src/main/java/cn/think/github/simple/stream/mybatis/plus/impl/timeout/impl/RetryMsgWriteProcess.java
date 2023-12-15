@@ -8,6 +8,7 @@ import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.RetryMsg;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.RetryMsgMapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.timeout.SimpleMsgWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -39,9 +40,8 @@ public class RetryMsgWriteProcess {
     @Resource
     private EmsSystemConfig emsSystemConfig;
 
-    public boolean saveRetry(List<Msg> msg, String group) {
+    public void saveRetry(List<Msg> msg, String group) {
         msg.forEach(i -> saveRetry(i, group));
-        return true;
     }
 
     public void saveRetry(Msg msg, String group) {
@@ -55,10 +55,11 @@ public class RetryMsgWriteProcess {
         saveRetry(realTopic, oldTopic, consumerTimes, group, msg.getOffset());
     }
 
+    @SneakyThrows
     public void saveRetry(String topic, String oldTopic, int consumerTimes, String group, Long offset) {
         // "%RETRY%" + group
         // 进入重试队列 or 死信队列
-        if (!isRetryTopic(topic)) {
+        if (isGeneralTopic(topic)) {
             retryMsgService.insert(topic, buildRetryTopic(group), group, offset, 1);
             return;
         }
@@ -78,7 +79,7 @@ public class RetryMsgWriteProcess {
         for (Msg msg : list) {
             long offset = msg.getOffset();
             String topic = msg.getRealTopic();
-            if (!isRetryTopic(topic)) {
+            if (isGeneralTopic(topic)) {
                 continue;
             }
             List<RetryMsg> retryMsgList = retryMsgMapper.selectList(new LambdaQueryWrapper<RetryMsg>()
@@ -90,13 +91,17 @@ public class RetryMsgWriteProcess {
             }
             for (RetryMsg retryMsg : retryMsgList) {
                 retryMsg.setState(STATE_SUCCESS);
-                retryMsgMapper.updateById(retryMsg);
+                boolean success = retryMsgService.updateForId(retryMsg);
+                log.debug("updateForId success = {}", success);
             }
         }
     }
 
-    public boolean isRetryTopic(String topic) {
-        return topic.contains(RETRY_TOPIC_KEY_WORD);
+    /**
+     * 普通 topic;
+     */
+    public boolean isGeneralTopic(String topic) {
+        return !topic.contains(RETRY_TOPIC_KEY_WORD);
     }
 
     public String buildRetryTopic(String group) {

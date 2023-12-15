@@ -8,6 +8,8 @@ public interface RedisClient {
 
     String get(String key);
 
+    void delete(String key);
+
     void set(String key, String value);
 
     void set(String key, String value, int n, TimeUnit timeUnit);

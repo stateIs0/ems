@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.SneakyThrows;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -40,11 +41,35 @@ public class RetryMsgService extends ServiceImpl<RetryMsgMapper, RetryMsg> {
             new M(13, TimeUnit.MINUTES.toSeconds(10)),
             new M(14, TimeUnit.MINUTES.toSeconds(20)),
             new M(15, TimeUnit.MINUTES.toSeconds(30)),
-            new M(16, TimeUnit.HOURS.toSeconds(1))
+            new M(16, TimeUnit.HOURS.toSeconds(1)),
+            new M(17, TimeUnit.HOURS.toSeconds(1))
     };
 
-    // 锁住.
-    public synchronized int insert(String oldTopic, String newTopic/*"%RETRY%" + group*/, String group, Long offset, int consumerTimes) {
+    static M[] TEST_ARR = new M[]{
+            null,// 从 1 开始
+            new M(1, 3),
+            new M(2, 5),
+            new M(3, 2),
+            new M(4, 2),
+            new M(5, 2),
+            new M(6, 2),
+            new M(7, 2),
+            new M(8, 2),
+            new M(9, 2),
+            new M(10, 2),
+            new M(11, 2),
+            new M(12, 2),
+            new M(13, 1),
+            new M(14, 1),
+            new M(15, 1),
+            new M(16, 1),
+            new M(17, 3)
+    };
+
+    private final boolean test = Boolean.parseBoolean(System.getProperty("ems.test"));
+
+    @SneakyThrows
+    public int insert(String oldTopic, String newTopic/*"%RETRY%" + group*/, String group, Long offset, int consumerTimes) {
 
         List<RetryMsg> retryMsgs = baseMapper.selectList(new LambdaQueryWrapper<RetryMsg>()
                 .eq(RetryMsg::getOldTopicName, oldTopic)
@@ -68,6 +93,12 @@ public class RetryMsgService extends ServiceImpl<RetryMsgMapper, RetryMsg> {
         return baseMapper.insert(retryMsg);
     }
 
+    @SneakyThrows
+    public boolean updateForId(RetryMsg retryMsg) {
+        return baseMapper.updateById(retryMsg) > 0;
+    }
+
+    @SneakyThrows
     public void update0(String topic, String group, Long offset, int consumerTimes) {
         RetryMsg retryMsg = new RetryMsg();
         // "%RETRY%" + group
@@ -86,6 +117,9 @@ public class RetryMsgService extends ServiceImpl<RetryMsgMapper, RetryMsg> {
 
     private Date getNext(int consumerTimes) {
         long timeInSec = ARR[consumerTimes].getTimeInSec();
+        if (test) {
+            timeInSec = TEST_ARR[consumerTimes].getTimeInSec();
+        }
         return new Date(System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(timeInSec));
     }
 

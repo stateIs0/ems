@@ -199,9 +199,6 @@ create index ems_retry_msg_consumer_times_index
 create index ems_retry_msg_group_name_index
     on ems.ems_retry_msg (group_name);
 
-create index ems_retry_msg_id_index
-    on ems.ems_retry_msg (id);
-
 create index ems_retry_msg_next_consumer_time_index
     on ems.ems_retry_msg (next_consumer_time);
 
@@ -281,12 +278,6 @@ create table ems.ems_topic_group_log
     update_time    datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
     deleted        tinyint  default 0                 not null
 );
-
-create index ems_topic_group_log_id_client_id_index
-    on ems.ems_topic_group_log (id, client_id);
-
-create index ems_topic_group_log_id_state_index
-    on ems.ems_topic_group_log (id, state);
 
 create index ems_topic_group_log_state_index
     on ems.ems_topic_group_log (state);

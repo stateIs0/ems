@@ -2,7 +2,9 @@ package cn.think.github.simple.stream.mybatis.plus.impl;
 
 import cn.think.github.simple.stream.api.EmsSystemConfig;
 import cn.think.github.simple.stream.api.Msg;
+import cn.think.github.simple.stream.api.StreamAdmin;
 import cn.think.github.simple.stream.api.simple.util.EmsEmptyList;
+import cn.think.github.simple.stream.api.simple.util.TopicConstant;
 import cn.think.github.simple.stream.api.spi.LockFailException;
 import cn.think.github.simple.stream.api.spi.StreamLock;
 import cn.think.github.simple.stream.api.util.JsonUtil;
@@ -48,25 +50,34 @@ public class BrokerPullProcessor {
     private EmsSystemConfig emsSystemConfig;
     @Resource
     private JsonUtil jsonUtil;
+    @Resource
+    private StreamAdmin streamAdmin;
 
     public List<Msg> pull(String topicName, String groupName, String clientId, int timeoutInSec) {
-        String lockKey = LockKeyFixString.getGroupOpKey(topicName, groupName);
 
+        int topicRule = streamAdmin.getTopicRule(topicName);
+        if (topicRule > TopicConstant.RULE_READ) {
+            return new ArrayList<>();
+        }
+
+        List<SimpleMsgWrapper> retryMsgList = retryMsgHandler.getRetryMsgList(topicName, groupName);
+
+        String lockKey = LockKeyFixString.getGroupOpKey(topicName, groupName);
         OffsetPair offsetPair;
 
         try {
-            offsetPair = (streamLock.lockAndExecute(() -> insertMsgLog(topicName, groupName, clientId), lockKey, timeoutInSec));
+            offsetPair = (streamLock.lockAndExecute(() -> insertMsgLog(topicName, groupName, clientId,
+                    retryMsgList.size() > 10), lockKey, timeoutInSec));
         } catch (LockFailException ignore) {
-            return new ArrayList<>();
+            return filterMsgList(retryMsgList, new ArrayList<>());
         } catch (Throwable e) {
             log.warn(e.getMessage(), e);
-            return new ArrayList<>();
+            return filterMsgList(retryMsgList, new ArrayList<>());
         }
         List<SimpleMsg> msgArrayList = new ArrayList<>();
         if (offsetPair != null) {
             msgArrayList = getSimpleMsgList(topicName, offsetPair, groupName);
         }
-        List<SimpleMsgWrapper> retryMsgList = retryMsgHandler.getRetryMsgList(topicName, groupName);
 
         if (msgArrayList.isEmpty() && retryMsgList.isEmpty()) {
             return new ArrayList<>();
@@ -94,7 +105,7 @@ public class BrokerPullProcessor {
                 .build())).collect(Collectors.toList());
     }
 
-    public boolean ack(List<Msg> list, String group, String clientId, int timeoutInSec) {
+    public boolean ack(List<Msg> list, String group, String clientId) {
         if (list.isEmpty()) {
             return true;
         }
@@ -168,14 +179,14 @@ public class BrokerPullProcessor {
      * 2. 场景二: c 后启动, p 先启动, c pull msg 时, 设置当前的 offset 为 Max, 并忽略 c 启动前的消息, 只消费 c 启动后的消息(offset Max+);
      * 3.
      */
-    private OffsetPair insertMsgLog(String topicName, String group, String clientId) {
+    private OffsetPair insertMsgLog(String topicName, String group, String clientId, boolean haveMoreRetry) {
         // topic max
         Long msgMaxOffset = msgService.getMsgMaxOffset(topicName);
         // group max
         Long logOffsetMax = logService.getLogMaxOffset(topicName, group);
         if (msgMaxOffset < 0 && logOffsetMax < 0) {
             // no msg & no log
-            logService.setMaxLogOffset(topicName, group, 0);
+            logService.generateEmptyConsumerLog(topicName, group, 0, clientId);
             return null;
         }
         if (msgMaxOffset < 0) {
@@ -184,7 +195,7 @@ public class BrokerPullProcessor {
         }
         if (msgMaxOffset > 0 && logOffsetMax < 0) {
             // first consumer
-            logService.setMaxLogOffset(topicName, group, msgMaxOffset);
+            logService.generateEmptyConsumerLog(topicName, group, msgMaxOffset, clientId);
             return null;
         }
         if (logOffsetMax >= msgMaxOffset) {
@@ -195,6 +206,9 @@ public class BrokerPullProcessor {
         long lastMaxOffset = min;
         List<TopicGroupLog> list = new ArrayList<>();
         int batchSize = emsSystemConfig.consumerBatchSize();
+        if (haveMoreRetry && batchSize > 1) {
+            batchSize = batchSize / 2;
+        }
         long m = (msgMaxOffset - logOffsetMax > batchSize ? batchSize : msgMaxOffset - logOffsetMax);
         for (int i = 0; i < m; i++) {
             lastMaxOffset = logOffsetMax + 1;
@@ -231,7 +245,7 @@ public class BrokerPullProcessor {
      * 过滤消息(非重试消息),并 map 为 offset.
      */
     private List<Long> filterNormalMsgOffset(List<Msg> list) {
-        return list.stream().filter(i -> !retryMsgHandler.isRetryTopic(i.getRealTopic())).map(Msg::getOffset).collect(Collectors.toList());
+        return list.stream().filter(i -> retryMsgHandler.isGeneralTopic(i.getRealTopic())).map(Msg::getOffset).collect(Collectors.toList());
     }
 
 

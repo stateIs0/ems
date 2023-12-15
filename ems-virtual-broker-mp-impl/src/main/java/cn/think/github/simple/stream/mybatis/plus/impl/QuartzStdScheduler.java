@@ -56,7 +56,7 @@ public class QuartzStdScheduler {
                     log.warn(e.getMessage(), e);
                 }
                 return null;
-            }, getClass().getName(), 10);
+            }, getClass().getName(), 100);
 
 
         } catch (Throwable e) {

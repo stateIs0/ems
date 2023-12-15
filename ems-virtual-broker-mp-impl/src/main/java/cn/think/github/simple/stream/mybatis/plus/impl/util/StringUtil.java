@@ -12,6 +12,10 @@ public class StringUtil {
         return s == null || s.trim().isEmpty();
     }
 
+    public static boolean notSame(String a, String b) {
+        return !a.equals(b);
+    }
+
     public static boolean isNotEmpty(String s) {
         return !isEmpty(s);
     }

@@ -30,6 +30,10 @@ public class Cache {
         redisTemplate.boundValueOps(key).set(value, num, timeUnit);
     }
 
+    public void del(String key) {
+        redisTemplate.delete(key);
+    }
+
     public <T> T get(String key, Class<T> c) {
         Object v = null;
         try {

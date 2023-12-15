@@ -7,6 +7,7 @@ import cn.think.github.simple.stream.api.monitor.MonitorClient;
 import cn.think.github.simple.stream.api.monitor.MonitorGroup;
 import cn.think.github.simple.stream.api.monitor.MonitorTopic;
 import cn.think.github.simple.stream.api.simple.util.TopicConstant;
+import cn.think.github.simple.stream.api.spi.RedisClient;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.GroupClientTableProcessor;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.LogService;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.MsgService;
@@ -17,6 +18,9 @@ import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.SimpleTopi
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.TopicGroupLog;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.SimpleGroupMapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.SimpleTopicMapper;
+import cn.think.github.simple.stream.mybatis.plus.impl.timeout.impl.RetryMsgWriteProcess;
+import cn.think.github.simple.stream.mybatis.plus.impl.util.RedisKeyFixString;
+import cn.think.github.simple.stream.mybatis.plus.impl.util.StringUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -35,17 +40,20 @@ import java.util.stream.Collectors;
 public class StreamAdminImpl implements StreamAdmin {
 
     @Resource
-    SimpleTopicMapper topicMapper;
+    private SimpleTopicMapper topicMapper;
     @Resource
-    SimpleGroupMapper groupMapper;
+    private SimpleGroupMapper groupMapper;
     @Resource
-    LogService logService;
+    private LogService logService;
     @Resource
-    GroupClientTableProcessor clientTableService;
+    private GroupClientTableProcessor clientTableService;
     @Resource
-    MsgService msgService;
+    private MsgService msgService;
     @Resource
-    EmsSystemConfig emsSystemConfig;
+    private EmsSystemConfig emsSystemConfig;
+    @Resource
+    private RedisClient redisClient;
+
 
     @Override
     public boolean isBroadcast(String groupName) {
@@ -104,6 +112,12 @@ public class StreamAdminImpl implements StreamAdmin {
             log.info("ems tip ---> topic exist {}", topic);
             return false;
         }
+        if (topic.contains(RetryMsgWriteProcess.RETRY_TOPIC_KEY_WORD)) {
+            throw new RuntimeException("topic 命名非法, 不能包含 RETRY 关键字. ->  " + topic);
+        }
+        if (topic.contains(" ")) {
+            throw new RuntimeException("topic 命名非法, 不能包含 空格. ->  " + topic);
+        }
         SimpleTopic simpleTopic = new SimpleTopic();
         simpleTopic.setTopicName(topic);
         simpleTopic.setRule(TopicConstant.RULE_FULL);
@@ -127,12 +141,19 @@ public class StreamAdminImpl implements StreamAdmin {
 
     @Override
     public int getTopicRule(String topic) {
+        String key = String.format(RedisKeyFixString.EMS_TOPIC_RULE_KEY, topic);
+        String value = redisClient.get(key);
+        if (StringUtil.isNotEmpty(value)) {
+            return Integer.parseInt(value);
+        }
         SimpleTopic simpleTopic = topicMapper.selectOne(new LambdaQueryWrapper<SimpleTopic>()
                 .eq(SimpleTopic::getTopicName, topic));
         if (simpleTopic == null) {
             return -1;
         }
-        return simpleTopic.getRule();
+        Integer rule = simpleTopic.getRule();
+        redisClient.set(key, String.valueOf(rule), 5, TimeUnit.SECONDS);
+        return rule;
     }
 
     @Override
@@ -140,6 +161,9 @@ public class StreamAdminImpl implements StreamAdmin {
         if (existGroup(groupName)) {
             log.info("ems tip ---> group exist {}", groupName);
             return false;
+        }
+        if (groupName.contains(" ")) {
+            throw new RuntimeException("groupName 命名非法, 不能包含 空格. ->  " + groupName);
         }
         SimpleGroup s = new SimpleGroup();
         s.setGroupName(groupName);

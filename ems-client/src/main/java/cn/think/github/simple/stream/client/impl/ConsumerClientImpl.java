@@ -15,6 +15,7 @@ import cn.think.github.simple.stream.client.support.ConsumerClient;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.UUID;
@@ -49,8 +50,6 @@ public class ConsumerClientImpl implements ConsumerClient {
     ThreadPoolExecutor mainWorker;
 
     Supplier<Broker> broker;
-
-    private Runnable renewRunnable;
 
     private ScheduledFuture<?> scheduledFuture;
 
@@ -116,7 +115,8 @@ public class ConsumerClientImpl implements ConsumerClient {
 
         running = true;
         broker = VirtualBrokerFactory.get();
-        renewRunnable = () -> {
+        //ignore
+        Runnable renewRunnable = () -> {
             try {
                 broker.get().renew(clientId, groupName, topicName);
             } catch (Throwable e) {
@@ -177,7 +177,7 @@ public class ConsumerClientImpl implements ConsumerClient {
         }
 
         @Override
-        public Thread newThread(Runnable runnable) {
+        public Thread newThread(@NonNull Runnable runnable) {
             Thread t = new Thread(runnable, topicName + "-" + groupName + "-" + ++num);
             t.setDaemon(true);
             return t;

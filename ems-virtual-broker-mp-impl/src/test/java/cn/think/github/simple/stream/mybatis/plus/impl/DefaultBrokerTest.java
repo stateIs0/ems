@@ -3,9 +3,10 @@ package cn.think.github.simple.stream.mybatis.plus.impl;
 import cn.think.github.simple.stream.api.util.JsonUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.Assert;
 import org.junit.Test;
 
-import java.util.Properties;
+import java.util.*;
 
 public class DefaultBrokerTest {
 
@@ -32,12 +33,27 @@ public class DefaultBrokerTest {
                 }
             }
         };
+    }
 
-        Properties load = jsonUtil.read(
-                "{\"esa.mq.context.key\":\"{\\\"KEY_TENANT_ID\\\":\\\"1000-oper\\\",\\\"KEY_CURRENT_USER\\\":\\\"{\\\\\\\"userId\\\\\\\":\\\\\\\"yunjie\\\\\\\",\\\\\\\"userName\\\\\\\":\\\\\\\"云杰\\\\\\\",\\\\\\\"extra\\\\\\\":{\\\\\\\"workNum\\\\\\\":\\\\\\\"1160\\\\\\\",\\\\\\\"mail\\\\\\\":\\\\\\\"yunjie@tsign.cn\\\\\\\",\\\\\\\"name\\\\\\\":\\\\\\\"张鹤生\\\\\\\",\\\\\\\"mobile\\\\\\\":\\\\\\\"18812665881\\\\\\\",\\\\\\\"alias\\\\\\\":\\\\\\\"云杰\\\\\\\",\\\\\\\"$jacocoData\\\\\\\":\\\\\\\"[Z@13833d48\\\\\\\",\\\\\\\"groupList\\\\\\\":\\\\\\\"[DepartmentGroup(groupId=899246032, groupName=公有云研发部, parentName=研发中心, parentId=898707956, managerList=null), DepartmentGroup(groupId=899021416, groupName=公有云PBU, parentName=PBG(同步正式环境不可修改), parentId=898734515, managerList=null)]\\\\\\\",\\\\\\\"job\\\\\\\":\\\\\\\"高级JAVA开发工程师\\\\\\\",\\\\\\\"account\\\\\\\":\\\\\\\"yunjie\\\\\\\"}}\\\"}\",\"esa.dispatch.context.traceId\":\"16cbd4de-b04b-4ed5-ab54-8a48cdb95ec0\"}"
-                , Properties.class);
+    @Test
+    public void treeMap() {
+        Map<String, List<String>> map = new TreeMap<>(new Comparator<String>() {
+            @Override
+            public int compare(String o1, String o2) {
+                return 0;
+            }
+        });
+        List<String> list = new ArrayList<>();
+        list.add("1");
+        list.add("2");
+        list.add("3");
+        list.add("4");
+        for (String s : list) {
+            List<String> list1 = map.computeIfAbsent(s, a -> new ArrayList<>());
+            list1.add(s);
+        }
 
-        System.out.println(load);
+        Assert.assertTrue(map.size() == 1);
     }
 
 

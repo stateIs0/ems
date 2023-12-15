@@ -17,11 +17,11 @@ import java.util.concurrent.LinkedBlockingQueue;
  * @Description
  * @date 2023/10/18
  **/
+@Getter
 @Slf4j
 @Component
 public class RetryMsgQueue {
 
-    @Getter
     Map<String, LinkedBlockingQueue<SimpleMsgWrapper>> queueMaps = new ConcurrentHashMap<>();
 
     public static String buildKey(String topic, String group) {
@@ -36,6 +36,7 @@ public class RetryMsgQueue {
         if (simpleMsgQueue.isEmpty()) {
             return new ArrayList<>();
         }
+        // for jdk 21, modify lock
         synchronized (simpleMsgQueue) {
             List<SimpleMsgWrapper> result = new ArrayList<>();
             while (!simpleMsgQueue.isEmpty()) {
@@ -43,12 +44,13 @@ public class RetryMsgQueue {
                 if (poll != null) {
                     result.add(poll);
                 }
-                if (result.size() >= 10) {
+                if (result.size() >= 150) {
+                    log.debug("--->>> topicName = {}, groupName = {}, simpleMsgQueue.size = {}", topicName, groupName, simpleMsgQueue.size());
                     break;
                 }
             }
             if (!result.isEmpty()) {
-                log.debug("ems retry msg count {} {}", topicName, result.size());
+                log.debug("-->> ems retry msg count {} {}", topicName, result.size());
             }
             return result;
         }

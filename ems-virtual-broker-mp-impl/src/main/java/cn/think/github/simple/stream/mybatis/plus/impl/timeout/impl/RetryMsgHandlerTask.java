@@ -14,6 +14,8 @@ import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.base.BaseD
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.RetryMsgMapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.SimpleMsgMapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.timeout.SimpleMsgWrapper;
+import cn.think.github.simple.stream.mybatis.plus.impl.timeout.impl.support.RetryTaskLockSupport;
+import cn.think.github.simple.stream.mybatis.plus.impl.util.StringUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,7 @@ import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 import static cn.think.github.simple.stream.mybatis.plus.impl.timeout.impl.RetryMsgQueue.buildKey;
+import static cn.think.github.simple.stream.mybatis.plus.impl.util.RedisKeyFixString.EMS_RETRY_TASK_LOCK_MAIN_KEY;
 
 /**
  * @version 1.0
@@ -35,6 +38,11 @@ import static cn.think.github.simple.stream.mybatis.plus.impl.timeout.impl.Retry
 @Slf4j
 @Service
 public class RetryMsgHandlerTask implements LifeCycle {
+
+    private static final int QUEUE_SIZE =
+            Integer.parseInt(System.getProperty("ems.memory.retry.queue.size", "10240"));
+
+    private static final String SYSTEM_RETRY = "system_retry";
 
     private static final int SERVICE_CORE = 1;
     private final ScheduledExecutorService service = new ScheduledThreadPoolExecutor(SERVICE_CORE, new NamedThreadFactory("RetryMsgHandlerTask"));
@@ -48,6 +56,8 @@ public class RetryMsgHandlerTask implements LifeCycle {
     private Broker broker;
     @Resource
     private RetryMsgQueue retryMsgQueue;
+    @Resource
+    private RetryTaskLockSupport retryTaskLockSupport;
 
     private boolean running;
 
@@ -69,7 +79,9 @@ public class RetryMsgHandlerTask implements LifeCycle {
 
         // 从数据库捞取消息
         Date date = new Date();
-        subGroups.forEach(i -> retryMsgList.addAll(retryMsgMapper.selectRetryMsg(date, i)));
+        subGroups.stream()
+                .filter(i -> StringUtil.notSame(i, SYSTEM_RETRY))
+                .forEach(i -> retryMsgList.addAll(retryMsgMapper.selectRetryMsg(date, i)));
 
         List<Long> idList = retryMsgList.stream().map(BaseDO::getId).collect(Collectors.toList());
         if (idList.isEmpty()) {
@@ -78,8 +90,7 @@ public class RetryMsgHandlerTask implements LifeCycle {
         // 更新状态
         updateSate(idList);
 
-        // 根据线程繁忙程度进行排序, 不忙的靠前
-        Map<String, List<RetryMsg>> map = new TreeMap<>((o1, o2) -> getPool(o1).getActiveCount() - getPool(o2).getActiveCount());
+        Map<String, List<RetryMsg>> map = new HashMap<>();
 
         // 根据 key 聚合 msg;
         retryMsgList.forEach(item -> {
@@ -90,8 +101,6 @@ public class RetryMsgHandlerTask implements LifeCycle {
 
         // 循环处理, 每个 key 对应一个 list<Msg> + pool + queue;
         // 当其中一个 queue 满了的时候,这个 pool 也将繁忙, 调用 execute 会出现阻塞;
-        //    为了防止阻塞, 对 map 进行排序, 优先提交那些 pool 不繁忙的 key;
-        //    但仍然存在某个 topic 有大量的重试消息, 可能阻塞整个主线程的可能行.
         map.forEach(this::process);
     }
 
@@ -114,7 +123,7 @@ public class RetryMsgHandlerTask implements LifeCycle {
                     .eq(SimpleMsg::getTopicName, oldTopicName)
                     .eq(SimpleMsg::getPhysicsOffset, offset));
             if (simpleMsg == null) {
-                log.warn("原始消息被删除, 无法找到重试消息体, topicName={}, offset={} createTime={} consumerTimes={}, nextConsumerTime={}",
+                log.info("原始消息被删除, 无法找到重试消息体, topicName={}, offset={} createTime={} consumerTimes={}, nextConsumerTime={}",
                         oldTopicName, offset, item.getCreateTime(), item.getConsumerTimes(), item.getNextConsumerTime());
                 RetryMsg retryMsg = new RetryMsg();
                 retryMsg.setId(item.getId());
@@ -123,23 +132,21 @@ public class RetryMsgHandlerTask implements LifeCycle {
                 retryMsgMapper.updateById(retryMsg);
                 return;
             }
-            // 超过 {} 则会阻塞;
-            try {
-                SimpleMsgWrapper msgWrapper = SimpleMsgWrapper.builder()
-                        .simpleMsg(simpleMsg)
-                        .realTopic(item.getRetryTopicName())
-                        .consumerTimes(item.getConsumerTimes())
-                        .build();
-                // 超时 2 s, 失败则回滚状态为 init.
-                retryMsgQueue.getQueueMaps()
-                        .computeIfAbsent(key, s -> new LinkedBlockingQueue<>(1024 * 10))// 一条消息 1kb, 1k 条, 1MB, 这里先放 10MB;
-                        .offer(msgWrapper, 2, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
+            SimpleMsgWrapper msgWrapper = SimpleMsgWrapper.builder()
+                    .simpleMsg(simpleMsg)
+                    .realTopic(item.getRetryTopicName())
+                    .consumerTimes(item.getConsumerTimes())
+                    .build();
+            // 失败则回滚状态为 init.
+            boolean offered = retryMsgQueue.getQueueMaps()
+                    .computeIfAbsent(key, s -> new LinkedBlockingQueue<>(QUEUE_SIZE))// 一条消息 1kb, 1k 条, 1MB, 这里先放 10MB;
+                    .offer(msgWrapper);
+            if (!offered) {
                 // 塞不进去, 只能回滚.
                 item.setState(RetryMsg.STATE_INIT);
                 item.setUpdateTime(new Date());
                 retryMsgMapper.updateById(item);
-                log.error("offer retry msg fail, key = {}", key);
+                RetryMsgHandlerTask.specialRulesLogPrint(key, offset);
             }
         }));
     }
@@ -152,21 +159,27 @@ public class RetryMsgHandlerTask implements LifeCycle {
                 if (!running) {
                     return;
                 }
+                Set<String> subGroups = broker.getSubGroups();
+                // 没有订阅者, 无需尝试重试.
+                if (subGroups.isEmpty()) {
+                    return;
+                }
                 if (this.clientId == null) {
                     this.clientId = IPv4AddressUtil.get() + "@" + PIDUtil.get() + "@RetryTaskThread@" + UUID.randomUUID();
                     log.warn("-->> retry task renew client {}", this.clientId);
                 }
                 SpiFactory.getInstance().getObj(Broker.class).get().renew(
-                        this.clientId, "system_retry", "system_retry"
+                        this.clientId, SYSTEM_RETRY, SYSTEM_RETRY
                 );
                 LockFactory.get().lockAndExecute(() -> {
                     try {
+                        retryTaskLockSupport.recordRetryTask();
                         pullSimpleMsg();
                     } catch (InterruptedException e) {
                         //ignore
                     }
                     return null;
-                }, getClass().getName(), 10);
+                }, EMS_RETRY_TASK_LOCK_MAIN_KEY, 10, 60);
             } catch (LockFailException lockFailException) {
                 log.warn(lockFailException.getMessage());
             } catch (Throwable e) {
@@ -179,7 +192,7 @@ public class RetryMsgHandlerTask implements LifeCycle {
     @Override
     public void stop() {
         running = false;
-        SpiFactory.getInstance().getObj(Broker.class).get().down(clientId);
+        Optional.ofNullable(clientId).ifPresent(i -> SpiFactory.getInstance().getObj(Broker.class).get().down(clientId));
     }
 
     @Override
@@ -195,5 +208,15 @@ public class RetryMsgHandlerTask implements LifeCycle {
                 new SynchronousQueue<>(),
                 new NamedThreadFactory("retryTask-" + key),
                 new ThreadPoolExecutor.CallerRunsPolicy()));
+    }
+
+    private static long PRE_TIME = 0;
+
+    public static void specialRulesLogPrint(String key, long offset) {
+        if (System.currentTimeMillis() - PRE_TIME > TimeUnit.SECONDS.toMillis(3)) {
+            log.warn("offer retry msg to queue fail, key = {}, offset = {}, QUEUE_SIZE = {}", key, offset, QUEUE_SIZE);
+
+            PRE_TIME = System.currentTimeMillis();
+        }
     }
 }

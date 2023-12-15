@@ -29,6 +29,11 @@ public class NormalRedisClientSpiImpl implements RedisClient {
     }
 
     @Override
+    public void delete(String key) {
+        cache.del(key);
+    }
+
+    @Override
     public void set(String key, String value) {
         cache.set(key, value, 60, TimeUnit.SECONDS);
     }

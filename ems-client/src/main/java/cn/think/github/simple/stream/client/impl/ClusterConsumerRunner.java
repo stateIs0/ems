@@ -3,8 +3,8 @@ package cn.think.github.simple.stream.client.impl;
 import cn.think.github.simple.stream.api.ConsumerResult;
 import cn.think.github.simple.stream.api.Msg;
 import cn.think.github.simple.stream.api.spi.LockFailException;
-import cn.think.github.simple.stream.client.support.CollectionUtils;
 import cn.think.github.simple.stream.api.util.NamedThreadFactory;
+import cn.think.github.simple.stream.client.support.CollectionUtils;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
@@ -38,7 +38,7 @@ public class ClusterConsumerRunner implements Runnable {
         this.threadNum = threadNum;
         this.workerPool = new ThreadPoolExecutor(
                 threadNum,
-                consumerClient.threadNum,
+                threadNum,
                 60,
                 TimeUnit.SECONDS,
                 new SynchronousQueue<>(),

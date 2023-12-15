@@ -10,5 +10,4 @@ public interface ClientTimeoutChecker {
 
     void checkAndClean();
 
-    boolean isHealth(String clientId);
 }

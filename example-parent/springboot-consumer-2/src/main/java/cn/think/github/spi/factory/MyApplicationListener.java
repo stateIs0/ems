@@ -48,12 +48,24 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
     public void main() {
 
         String topic = "TopicB";
-        String group = "Group2";
+        String group = "GroupA_2";
 
         broker.start();
 
         initFlowRules();
 
+
+        extracted(topic, group);
+
+        topic = "TopicA";
+        group = "GroupB_2";
+
+        extracted(topic, group);
+
+
+    }
+
+    private void extracted(String topic, String group) {
         Supplier<StreamAdmin> adminSupplier = spiFactory.getObj(StreamAdmin.class);
         adminSupplier.get().createTopic(topic);
         adminSupplier.get().createGroup(group, topic, GroupType.CLUSTER);
@@ -62,7 +74,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         consumer.register(msgs -> {
             try (Entry ignored = SphU.entry("Group")) {
                 Msg m = msgs.get(0);
-                save(topic, m, group);
+                //save(topic, m, group);
                 //log.info("msg id =[{}]", m.getMsgId());
                 return ConsumerResult.success();
             } catch (BlockException ex) {
@@ -74,8 +86,6 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         });
 
         consumer.start();
-
-
     }
 
     private void save(String topic, Msg m, String group) {

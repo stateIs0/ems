@@ -35,6 +35,8 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static cn.think.github.simple.stream.mybatis.plus.impl.util.RedisKeyFixString.EMS_TOPIC_RULE_KEY_ALL;
+
 @Slf4j
 @Service
 public class StreamAdminImpl implements StreamAdmin {
@@ -154,6 +156,15 @@ public class StreamAdminImpl implements StreamAdmin {
         Integer rule = simpleTopic.getRule();
         redisClient.set(key, String.valueOf(rule), 5, TimeUnit.SECONDS);
         return rule;
+    }
+
+    @Override
+    public int getEmsRule() {
+        String value = redisClient.get(EMS_TOPIC_RULE_KEY_ALL);
+        if (StringUtil.isNotEmpty(value)) {
+            return Integer.parseInt(value);
+        }
+        return -1;
     }
 
     @Override

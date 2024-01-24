@@ -22,10 +22,10 @@ public class AssemblyEmsSystemConfig implements EmsSystemConfig {
 
     @Override
     public boolean autoCreateTopic() {
-        String autoCreteTopic = redisClient.get("autoCreateTopic");
+        String autoCreteTopic = redisClient.get("emsAutoCreateTopic");
         if (autoCreteTopic == null) {
             boolean autoCreteTopicBoo = mySQLEmsSystemConfig.autoCreteTopic();
-            redisClient.set("autoCreateTopic", String.valueOf(autoCreteTopicBoo));
+            redisClient.set("emsAutoCreateTopic", String.valueOf(autoCreteTopicBoo));
             return autoCreteTopicBoo;
         }
         return Boolean.parseBoolean(autoCreteTopic);
@@ -33,10 +33,10 @@ public class AssemblyEmsSystemConfig implements EmsSystemConfig {
 
     @Override
     public int msgMaxSizeInBytes() {
-        String msgMaxSizeInBytes = redisClient.get("msgMaxSizeInBytes");
+        String msgMaxSizeInBytes = redisClient.get("emsMsgMaxSizeInBytes");
         if (msgMaxSizeInBytes == null) {
             int msgMaxSizeInBytesInt = mySQLEmsSystemConfig.msgMaxSizeInBytes();
-            redisClient.set("msgMaxSizeInBytes", String.valueOf(msgMaxSizeInBytesInt));
+            redisClient.set("emsMsgMaxSizeInBytes", String.valueOf(msgMaxSizeInBytesInt));
             return msgMaxSizeInBytesInt;
         }
         return Integer.parseInt(msgMaxSizeInBytes);
@@ -44,10 +44,10 @@ public class AssemblyEmsSystemConfig implements EmsSystemConfig {
 
     @Override
     public int consumerBatchSize() {
-        String consumerBatchSize = redisClient.get("consumerBatchSize");
+        String consumerBatchSize = redisClient.get("emsConsumerBatchSize");
         if (consumerBatchSize == null) {
             int consumerBatchSizeInt = mySQLEmsSystemConfig.consumerBatchSize();
-            redisClient.set("consumerBatchSize", String.valueOf(consumerBatchSizeInt));
+            redisClient.set("emsConsumerBatchSize", String.valueOf(consumerBatchSizeInt));
             return consumerBatchSizeInt;
         }
         return Integer.parseInt(consumerBatchSize);
@@ -55,10 +55,10 @@ public class AssemblyEmsSystemConfig implements EmsSystemConfig {
 
     @Override
     public int consumerThreads() {
-        String consumerThreads = redisClient.get("consumerThreads");
+        String consumerThreads = redisClient.get("emsConsumerThreads");
         if (consumerThreads == null) {
             int consumerThreadsInt = mySQLEmsSystemConfig.consumerInitThreads();
-            redisClient.set("consumerThreads", String.valueOf(consumerThreadsInt));
+            redisClient.set("emsConsumerThreads", String.valueOf(consumerThreadsInt));
             return consumerThreadsInt;
         }
         return Integer.parseInt(consumerThreads);
@@ -66,12 +66,23 @@ public class AssemblyEmsSystemConfig implements EmsSystemConfig {
 
     @Override
     public int consumerRetryMaxTimes() {
-        String consumerRetryMaxTimes = redisClient.get("consumerRetryMaxTimes");
+        String consumerRetryMaxTimes = redisClient.get("emsConsumerRetryMaxTimes");
         if (consumerRetryMaxTimes == null) {
             int consumerRetryMaxTimesInt = mySQLEmsSystemConfig.consumerRetryMaxTimes();
-            redisClient.set("consumerRetryMaxTimes", String.valueOf(consumerRetryMaxTimesInt));
+            redisClient.set("emsConsumerRetryMaxTimes", String.valueOf(consumerRetryMaxTimesInt));
             return consumerRetryMaxTimesInt;
         }
         return Integer.parseInt(consumerRetryMaxTimes);
+    }
+
+    @Override
+    public int emsBrokerPullMaxWaitTimes() {
+        String emsBrokerPullMaxWaitTimes = redisClient.get("emsBrokerPullMaxWaitTimes");
+        if (emsBrokerPullMaxWaitTimes == null) {
+            int emsBrokerPullMaxWaitTimesInt = mySQLEmsSystemConfig.emsBrokerPullMaxWaitTimes();
+            redisClient.set("emsBrokerPullMaxWaitTimes", String.valueOf(emsBrokerPullMaxWaitTimesInt));
+            return emsBrokerPullMaxWaitTimesInt;
+        }
+        return Integer.parseInt(emsBrokerPullMaxWaitTimes);
     }
 }

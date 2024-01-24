@@ -3,6 +3,8 @@ package cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.SimpleTopic;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 /**
  * @version 1.0
@@ -13,4 +15,6 @@ import org.apache.ibatis.annotations.Mapper;
 @Mapper
 public interface SimpleTopicMapper extends BaseMapper<SimpleTopic> {
 
+    @Select(value = "select last_offset from ems_simple_topic where topic_name = #{topic}")
+    String selectLastOffset(@Param("topic") String topic);
 }

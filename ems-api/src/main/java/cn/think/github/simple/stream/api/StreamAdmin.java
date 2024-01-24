@@ -25,6 +25,8 @@ public interface StreamAdmin {
 
     int getTopicRule(String topic);
 
+    int getEmsRule();
+
     boolean setTopicRule(String t, int rule);
 
     boolean resetTopicOffset(String topic, long offset);

@@ -72,48 +72,42 @@ public class ClusterConsumerRunner implements Runnable {
                 return;
             }
 
-            List<Msg> finalMsgList = msgList;
-            while (true) {
-                try {
-                    workerPool.execute(() -> consumer(finalMsgList));
-                    break;
-                } catch (RejectedExecutionException r) {
-                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+            msgList.forEach(msg -> {
+                while (true) {
+                    try {
+                        List<Msg> array = new ArrayList<>();
+                        // only one
+                        array.add(msg);
+                        workerPool.execute(() -> consumer(array));
+                        break;
+                    } catch (RejectedExecutionException r) {
+                        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+                    }
                 }
-            }
+            });
+
         } catch (Throwable e) {
             log.error(e.getMessage(), e);
         }
     }
 
-    private void consumer(List<Msg> finalMsgList) {
-        List<Msg> ack = new ArrayList<>();
-        for (Msg m : finalMsgList) {
-            try {
-                m.setReceiveLater(true);
-                List<Msg> w = new ArrayList<>();
-                w.add(m);
-                ConsumerResult result = consumerClient.bizListener.consumer(w);
-                if (result == null) {
-                    throw new RuntimeException("消费者不能返回 null");
-                }
-                m.setReceiveLater(result.isReceiveLater());
-            } catch (OutOfMemoryError error) {
-                // oom 了 todo 特殊处理
-                log.error(error.getMessage(), error);
-                m.setReceiveLater(true);
-            } catch (Throwable t) {
-                // catch 业务异常, 并进行记录.
-                log.error(t.getMessage(), t);
-                m.setReceiveLater(true);
-            } finally {
-                ack.add(m);
+    private void consumer(List<Msg> array) {
+        Msg m = array.stream().findFirst().get();
+        try {
+            m.setReceiveLater(true);
+            ConsumerResult result = consumerClient.bizListener.consumer(array);
+            if (result == null) {
+                throw new RuntimeException("消费者不能返回 null");
             }
+            m.setReceiveLater(result.isReceiveLater());
+        } catch (Throwable t) {
+            log.error(t.getMessage(), t);
+            m.setReceiveLater(true);
         }
-        if (consumerClient.broker.get().ack(ack, consumerClient.groupName, clientIdId, 30)) {
+        if (consumerClient.broker.get().ack(array, consumerClient.groupName, clientIdId, 30)) {
             // success, ignore
             return;
         }
-        log.error("ack fail, msg = {}", finalMsgList);
+        log.error("ack fail, msg = {}", array);
     }
 }

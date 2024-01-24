@@ -21,6 +21,8 @@ public class RetryMsg extends BaseDO {
     public static int STATE_INIT = 1;
     public static int STATE_SUCCESS = 2;
     public static int STATE_PROCESSING = 3;// 处理中.
+    public static int STATE_DEAD = 4;// 死信.
+    public static int STATE_NOT_FOUND = 5;// 消息不存在.
 
     String oldTopicName;
 

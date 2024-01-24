@@ -90,7 +90,12 @@ public class RetryMsgService extends ServiceImpl<RetryMsgMapper, RetryMsg> {
         retryMsg.setNextConsumerTime(getNext(consumerTimes));
         retryMsg.setCreateTime(new Date());
         retryMsg.setUpdateTime(new Date());
-        return baseMapper.insert(retryMsg);
+        int result = 0;
+        while (result <= 0) {
+            // 唯一索引 // offset + retryTopicName
+            result = DuplicateKeyExceptionClosure.submit(() -> baseMapper.insert(retryMsg), 0);
+        }
+        return result;
     }
 
     @SneakyThrows
@@ -98,14 +103,13 @@ public class RetryMsgService extends ServiceImpl<RetryMsgMapper, RetryMsg> {
         return baseMapper.updateById(retryMsg) > 0;
     }
 
-    @SneakyThrows
-    public void update0(String topic, String group, Long offset, int consumerTimes) {
+    public void update0(String topic, String group, Long offset, int consumerTimes, int state) {
         RetryMsg retryMsg = new RetryMsg();
         // "%RETRY%" + group
         retryMsg.setRetryTopicName(topic);
         retryMsg.setOffset(offset);
         retryMsg.setGroupName(group);
-        retryMsg.setState(RetryMsg.STATE_INIT);
+        retryMsg.setState(state);
         retryMsg.setConsumerTimes(consumerTimes);
         retryMsg.setNextConsumerTime(getNext(consumerTimes));
         retryMsg.setUpdateTime(new Date());
@@ -113,6 +117,11 @@ public class RetryMsgService extends ServiceImpl<RetryMsgMapper, RetryMsg> {
                 .eq(RetryMsg::getRetryTopicName, topic)
                 .eq(RetryMsg::getGroupName, group)
                 .eq(RetryMsg::getOffset, offset));
+    }
+
+    @SneakyThrows
+    public void update0(String topic, String group, Long offset, int consumerTimes) {
+        update0(topic, group, offset, consumerTimes, RetryMsg.STATE_INIT);
     }
 
     private Date getNext(int consumerTimes) {

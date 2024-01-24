@@ -39,4 +39,9 @@ public class SimpleTopic extends BaseDO {
      * int RULE_DENY = 4;
      */
     private Integer rule;
+
+    /**
+     * 兜底的记录, 防止表被 clean,redis 被重装
+     */
+    private String lastOffset;
 }

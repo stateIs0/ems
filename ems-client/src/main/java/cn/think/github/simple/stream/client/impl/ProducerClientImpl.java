@@ -65,8 +65,8 @@ public class ProducerClientImpl implements ProducerClient {
         // 判断 topic 写入权限, 如果禁止写入, 就抛弃消息
         if (first || new Random().nextInt(10000) % 5000 == 0) {
             first = false;
-            if (TopicConstant.RULE_WRITE < admin.getTopicRule(msg.getTopic())) {
-                log.warn("topic {} 写权限被关闭, 停止写入", msg.getTopic());
+            if (TopicConstant.RULE_WRITE < admin.getTopicRule(msg.getTopic()) || TopicConstant.RULE_WRITE < admin.getEmsRule()) {
+                log.warn("topic {} 写权限被关闭, 停止写入, body = {}", msg.getTopic(), msg.getBody());
                 return new SendResult(false);
             }
         }

@@ -48,8 +48,8 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
 
     public void main() {
 
-        String topic = "TopicA";
-        String group = "Group1";
+        String topic = "t3";
+        String group = "t3_A";
 
         broker.start();
 
@@ -72,9 +72,10 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
             try (Entry ignored = SphU.entry("Group")) {
                 Msg m = msgs.get(0);
                 save(topic, m, group);
+                Thread.sleep(1000);
                 //log.info("msg id =[{}]", m.getMsgId());
                 return ConsumerResult.success();
-            } catch (BlockException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
                 return ConsumerResult.fail();
             }
@@ -93,15 +94,15 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         runningLog.setConsumerTimes(m.getConsumerTimes());
         runningLog.setGroupName(group);
         runningLog.setOffset(m.getMsgId());
-        runningLogService.save(runningLog);
+        //runningLogService.save(runningLog);
 //        RAtomicLong atomicLong = redisson.getAtomicLong("hello");
 //        atomicLong.incrementAndGet();
     }
 
     public void main2() {
 
-        String topic = "TopicB";
-        String group = "Group3";
+        String topic = "t3";
+        String group = "t3_B";
 
         broker.start();
 
@@ -115,10 +116,11 @@ public class MyApplicationListener implements ApplicationListener<ApplicationRea
         consumer.register(msgs -> {
             try (Entry entry = SphU.entry("Group")) {
                 Msg m = msgs.get(0);
+                Thread.sleep(1000);
                 save(topic, m, group);
                 //log.info("msg id =[{}]", m.getMsgId());
                 return ConsumerResult.success();
-            } catch (BlockException ex) {
+            } catch (Exception ex) {
                 System.out.println("blocked!");
                 return ConsumerResult.fail();
             }

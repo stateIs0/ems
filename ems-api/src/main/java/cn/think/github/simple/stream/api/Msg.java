@@ -33,4 +33,6 @@ public class Msg {
 
     private boolean receiveLater;
 
+    private Long dbId;
+
 }

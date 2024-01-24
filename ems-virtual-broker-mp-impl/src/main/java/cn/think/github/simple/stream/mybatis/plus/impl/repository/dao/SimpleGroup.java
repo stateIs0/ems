@@ -32,4 +32,9 @@ public class SimpleGroup extends BaseDO {
      * BROADCASTING
      */
     private String groupType;
+
+    /**
+     * 兜底的记录, 防止表被 clean,redis 被重装
+     */
+    private String lastOffset;
 }

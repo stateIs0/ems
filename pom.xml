@@ -16,8 +16,8 @@
         <module>ems-springboot2-openSource-starter</module>
         <module>ems-virtual-broker-mp-impl</module>
 
-        <module>example-parent</module>
-        <module>example-parent/dispatcher</module>
+<!--        <module>example-parent</module>-->
+<!--        <module>example-parent/dispatcher</module>-->
     </modules>
 
     <properties>

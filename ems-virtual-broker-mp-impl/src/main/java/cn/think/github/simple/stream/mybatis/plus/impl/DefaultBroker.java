@@ -4,11 +4,11 @@ import cn.think.github.simple.stream.api.LifeCycle;
 import cn.think.github.simple.stream.api.Msg;
 import cn.think.github.simple.stream.api.spi.Broker;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.GroupClientTableProcessor;
+import cn.think.github.simple.stream.mybatis.plus.impl.util.IOUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import java.util.HashSet;
 import java.util.List;
@@ -34,9 +34,11 @@ public class DefaultBroker implements Broker {
 
     private volatile boolean start;
 
+    private Map<String, Integer> counter = new ConcurrentHashMap<>();
+
     @PostConstruct
     public void init() {
-        log.info("--------->>>> mp-broker start.....");
+        log.info(IOUtils.toString(getClass().getClassLoader().getResourceAsStream("ems.txt")));
     }
 
     @Override
@@ -82,7 +84,19 @@ public class DefaultBroker implements Broker {
             start();
         }
 
-        return brokerPullProcessor.pull(topicName, groupName, clientId, timeoutInSec);
+        List<Msg> pullResult = brokerPullProcessor.pull(topicName, groupName, clientId, timeoutInSec);
+        if (pullResult.isEmpty()) {
+            int orDefault = counter.getOrDefault(clientId, 0) + 1;
+            counter.put(clientId, orDefault);
+            // 连续 5 次都没有拉取到消息, 猜测可能是缓存无序导致, 将缓存失效
+            if (orDefault > 5) {
+                brokerPullProcessor.cleanCache(topicName);
+                counter.remove(clientId);
+            }
+        } else {
+            counter.remove(clientId);
+        }
+        return pullResult;
     }
 
     @Override
@@ -90,7 +104,10 @@ public class DefaultBroker implements Broker {
         if (notStart()) {
             start();
         }
-        return brokerPullProcessor.ack(list, group, clientId);
+        if (list.isEmpty()) {
+            return false;
+        }
+        return brokerPullProcessor.ack(list.stream().findFirst().get(), group, clientId);
     }
 
 

@@ -45,7 +45,7 @@ public class BrokerPullProcessor {
     @Resource
     private LogService logService;
     @Resource
-    private RetryMsgWriteProcess retryMsgHandler;
+    private RetryMsgWriteProcess retryMsgWriteProcess;
     @Resource
     private EmsSystemConfig emsSystemConfig;
     @Resource
@@ -53,14 +53,16 @@ public class BrokerPullProcessor {
     @Resource
     private StreamAdmin streamAdmin;
 
+
     public List<Msg> pull(String topicName, String groupName, String clientId, int timeoutInSec) {
 
         int topicRule = streamAdmin.getTopicRule(topicName);
-        if (topicRule > TopicConstant.RULE_READ) {
+        int emsRule = streamAdmin.getEmsRule();
+        if (topicRule > TopicConstant.RULE_READ || emsRule > TopicConstant.RULE_READ) {
             return new ArrayList<>();
         }
 
-        List<SimpleMsgWrapper> retryMsgList = retryMsgHandler.getRetryMsgList(topicName, groupName);
+        List<SimpleMsgWrapper> retryMsgList = retryMsgWriteProcess.getRetryMsgList(topicName, groupName);
 
         String lockKey = LockKeyFixString.getGroupOpKey(topicName, groupName);
         OffsetPair offsetPair;
@@ -69,21 +71,25 @@ public class BrokerPullProcessor {
             offsetPair = (streamLock.lockAndExecute(() -> insertMsgLog(topicName, groupName, clientId,
                     retryMsgList.size() > 10), lockKey, timeoutInSec));
         } catch (LockFailException ignore) {
-            return filterMsgList(retryMsgList, new ArrayList<>());
+            return filterMsgList(retryMsgList, new ArrayList<>(), null);
         } catch (Throwable e) {
             log.warn(e.getMessage(), e);
-            return filterMsgList(retryMsgList, new ArrayList<>());
+            return filterMsgList(retryMsgList, new ArrayList<>(), null);
         }
         List<SimpleMsg> msgArrayList = new ArrayList<>();
         if (offsetPair != null) {
-            msgArrayList = getSimpleMsgList(topicName, offsetPair, groupName);
+            msgArrayList = getSimpleMsgList(topicName, offsetPair, groupName, clientId);
         }
 
         if (msgArrayList.isEmpty() && retryMsgList.isEmpty()) {
             return new ArrayList<>();
         }
 
-        return filterMsgList(retryMsgList, msgArrayList);
+        Map<Long, Long> map = new HashMap<>();
+        if (offsetPair != null) {
+            map = offsetPair.getMap();
+        }
+        return filterMsgList(retryMsgList, msgArrayList, map);
     }
 
     public List<Msg> pullMsg(String topicName, long maxOffset) {
@@ -105,48 +111,58 @@ public class BrokerPullProcessor {
                 .build())).collect(Collectors.toList());
     }
 
-    public boolean ack(List<Msg> list, String group, String clientId) {
-        if (list.isEmpty()) {
-            return true;
+    public boolean ack(Msg msg, String group, String clientId) {
+
+        String topic = msg.getTopic();
+        if (msg.isReceiveLater()) {
+            // fail
+            retryMsgWriteProcess.saveRetry(msg, group);
+            logService.updateOffsetBatch(topic, group, clientId, TopicGroupLog.STATE_RETRY, msg);
+        } else {
+            // success
+            logService.updateOffsetBatch(topic, group, clientId, TopicGroupLog.STATE_DONE, msg);
+            retryMsgWriteProcess.ackSuccessRetryMsgList(msg);
         }
 
-        List<Msg> badList = list.stream().filter(Msg::isReceiveLater).collect(Collectors.toList());
-        List<Msg> goodList = list.stream().filter(a -> !a.isReceiveLater()).collect(Collectors.toList());
-
-        String topic = list.get(0).getTopic();
-
-        if (!badList.isEmpty()) {
-            retryMsgHandler.saveRetry(badList, group);
-            logService.updateOffsetBatch(topic, group, clientId, TopicGroupLog.STATE_RETRY, filterNormalMsgOffset(badList));
-        }
-        if (!goodList.isEmpty()) {
-            logService.updateOffsetBatch(topic, group, clientId, TopicGroupLog.STATE_DONE, filterNormalMsgOffset(goodList));
-            retryMsgHandler.ackSuccessRetryMsgList(goodList);
-        }
         return true;
     }
 
     @NotNull
-    private List<SimpleMsg> getSimpleMsgList(String topicName, OffsetPair offsetPair, String group) {
+    private List<SimpleMsg> getSimpleMsgList(String topicName, OffsetPair offsetPair, String group, String clientId) {
         List<SimpleMsg> msgArrayList;
         msgArrayList = msgService.getBatch(topicName, offsetPair.min, offsetPair.max);
-        // 可能 redis 提交了, 但事务没提交, 这里不上锁, 兼容处理. 处理 N 次...
-        int count = 0;
-        while (((offsetPair.max - offsetPair.min) + 1) != msgArrayList.size()) {
-            log.warn("msg size fall short of expectations....topic = {}, group = {}, ResultMsgSize = {}, offsetPair = {}",
-                    topicName, group, msgArrayList.size(), offsetPair);
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+        // 由于是并发写入的, 则可能发生 10 写入成功 db&redis, 9 还没写入成功数据库.
+        // 也可能是 9 在写入数据库的时候, 发生了异常. 如果是这样的话, 就没有这个消息;
+        // 此时,我们将其放入到重试消息表里, 10s 后进行重试. 如果没有, 就忽略.
+        int times = 0;
+        int maxTimes = emsSystemConfig.emsBrokerPullMaxWaitTimes();
+        while (((offsetPair.max - offsetPair.min) + 1) != msgArrayList.size() && times < maxTimes) {
             msgArrayList = msgService.getBatch(topicName, offsetPair.min, offsetPair.max);
-
-            if (++count > 20 && ((offsetPair.max - offsetPair.min) + 1) != msgArrayList.size()) {
-                log.warn("消息和预期数量不一致, 可能是发送时出了问题, 请检查...");
-                return msgArrayList;
-            }
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
+            times++;
         }
+
+
+        if (((offsetPair.max - offsetPair.min) + 1) == msgArrayList.size()) {
+            return msgArrayList;
+        }
+
+        Set<Long> offsetCollect = msgArrayList.stream().map(SimpleMsg::getPhysicsOffset).collect(Collectors.toSet());
+
+        for (long offset = offsetPair.min; offset <= offsetPair.max; offset++) {
+            if (offsetCollect.contains(offset)) {
+                continue;
+            }
+            // 没等到, 标记为 10s 重试;
+            retryMsgWriteProcess.saveRetry(topicName, topicName, 1, group, offset);
+            logService.updateOffsetBatch(topicName, group, clientId, TopicGroupLog.STATE_NOT_FOUND_WITH_RETRY,
+                    Msg.builder().realTopic(topicName).dbId(offsetPair.map.get(offset)).offset(offset).build());
+        }
+
         return msgArrayList;
     }
 
-    private List<Msg> filterMsgList(List<SimpleMsgWrapper> retryMsgList, List<SimpleMsg> msgArrayList) {
+    private List<Msg> filterMsgList(List<SimpleMsgWrapper> retryMsgList, List<SimpleMsg> msgArrayList, Map<Long, Long> map) {
         List<Msg> collect = retryMsgList.stream()
                 .filter(Objects::nonNull)
                 .filter(a -> a.getSimpleMsg() != null)
@@ -169,6 +185,7 @@ public class BrokerPullProcessor {
                 .realTopic(simpleMsg.getTopicName())
                 .properties(load(simpleMsg.getProperties()))
                 .tags(simpleMsg.getTags())
+                .dbId(map != null ? map.get(simpleMsg.getPhysicsOffset()) : 0L)
                 .build())).collect(Collectors.toList()));
         return collect;
     }
@@ -209,28 +226,24 @@ public class BrokerPullProcessor {
         if (haveMoreRetry && batchSize > 1) {
             batchSize = batchSize / 2;
         }
+        // create msg log ↓↓↓↓↓↓↓
         long m = (msgMaxOffset - logOffsetMax > batchSize ? batchSize : msgMaxOffset - logOffsetMax);
+        Map<Long, Long> map = new HashMap<>();
         for (int i = 0; i < m; i++) {
             lastMaxOffset = logOffsetMax + 1;
             logOffsetMax = lastMaxOffset;
-            TopicGroupLog db = new TopicGroupLog();
-            db.setGroupName(group);
-            db.setTopicName(topicName);
-            db.setState(TopicGroupLog.STATE_START);
-            db.setPhysicsOffset(lastMaxOffset);
-            db.setClientId(clientId);
-            db.setCreateTime(new Date());
-            db.setUpdateTime(new Date());
-            list.add(db);
+            TopicGroupLog groupLog = createGroupLog(topicName, group, clientId, lastMaxOffset);
+            list.add(groupLog);
+            logService.save(groupLog);
+            map.put(groupLog.getPhysicsOffset(), groupLog.getId());
         }
 
         if (list.isEmpty()) {
             return null;
         }
 
-        logService.saveBatch(list);
         logService.setMaxLogOffset(topicName, group, lastMaxOffset);
-        return new OffsetPair(min, lastMaxOffset);
+        return new OffsetPair(min, lastMaxOffset, map);
     }
 
     private Properties load(String propertiesString) {
@@ -240,14 +253,22 @@ public class BrokerPullProcessor {
         return jsonUtil.read(propertiesString, Properties.class);
     }
 
-
-    /**
-     * 过滤消息(非重试消息),并 map 为 offset.
-     */
-    private List<Long> filterNormalMsgOffset(List<Msg> list) {
-        return list.stream().filter(i -> retryMsgHandler.isGeneralTopic(i.getRealTopic())).map(Msg::getOffset).collect(Collectors.toList());
+    public void cleanCache(String topic) {
+        msgService.clean(topic);
     }
 
+    @NotNull
+    private static TopicGroupLog createGroupLog(String topicName, String group, String clientId, long lastMaxOffset) {
+        TopicGroupLog db = new TopicGroupLog();
+        db.setGroupName(group);
+        db.setTopicName(topicName);
+        db.setState(TopicGroupLog.STATE_START);
+        db.setPhysicsOffset(lastMaxOffset);
+        db.setClientId(clientId);
+        db.setCreateTime(new Date());
+        db.setUpdateTime(new Date());
+        return db;
+    }
 
     @Data
     @AllArgsConstructor
@@ -255,5 +276,6 @@ public class BrokerPullProcessor {
     static class OffsetPair {
         long min;
         long max;
+        Map<Long, Long> map = new HashMap<>();
     }
 }

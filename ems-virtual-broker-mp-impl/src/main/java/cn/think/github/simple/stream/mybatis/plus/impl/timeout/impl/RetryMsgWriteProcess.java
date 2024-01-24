@@ -3,6 +3,7 @@ package cn.think.github.simple.stream.mybatis.plus.impl.timeout.impl;
 import cn.think.github.simple.stream.api.EmsSystemConfig;
 import cn.think.github.simple.stream.api.Msg;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.DeadMsgService;
+import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.DuplicateKeyExceptionClosure;
 import cn.think.github.simple.stream.mybatis.plus.impl.crud.services.RetryMsgService;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.RetryMsg;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper.RetryMsgMapper;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.List;
 
+import static cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.RetryMsg.STATE_DEAD;
 import static cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.RetryMsg.STATE_SUCCESS;
 
 /**
@@ -40,10 +42,6 @@ public class RetryMsgWriteProcess {
     @Resource
     private EmsSystemConfig emsSystemConfig;
 
-    public void saveRetry(List<Msg> msg, String group) {
-        msg.forEach(i -> saveRetry(i, group));
-    }
-
     public void saveRetry(Msg msg, String group) {
         // "%RETRY%" + group
         String realTopic = msg.getRealTopic();
@@ -60,47 +58,48 @@ public class RetryMsgWriteProcess {
         // "%RETRY%" + group
         // 进入重试队列 or 死信队列
         if (isGeneralTopic(topic)) {
-            retryMsgService.insert(topic, buildRetryTopic(group), group, offset, 1);
+            DuplicateKeyExceptionClosure.execute(() -> retryMsgService.insert(topic, buildRetryTopic(group), group, offset, 1));
             return;
         }
         int consumerRetryMaxTimes = emsSystemConfig.consumerRetryMaxTimes();
         if (consumerTimes >= consumerRetryMaxTimes) {
             // 死信
             deadMsgService.save(oldTopic, group, String.valueOf(offset), consumerTimes + 1);
+            // fix
+            retryMsgService.update0(topic, group, offset, consumerTimes + 1, STATE_DEAD);
+        } else {
+            retryMsgService.update0(topic, group, offset, consumerTimes + 1);
         }
-        retryMsgService.update0(topic, group, offset, consumerTimes + 1);
     }
 
     public List<SimpleMsgWrapper> getRetryMsgList(String topicName, String groupName) {
         return retryMsgQueue.getRetryMsgList(topicName, groupName);
     }
 
-    public void ackSuccessRetryMsgList(List<Msg> list) {
-        for (Msg msg : list) {
-            long offset = msg.getOffset();
-            String topic = msg.getRealTopic();
-            if (isGeneralTopic(topic)) {
-                continue;
-            }
-            List<RetryMsg> retryMsgList = retryMsgMapper.selectList(new LambdaQueryWrapper<RetryMsg>()
-                    .eq(RetryMsg::getOffset, offset)
-                    .eq(RetryMsg::getRetryTopicName, topic));
-            if (retryMsgList == null) {
-                log.warn("retryMsg is null {} {}", topic, offset);
-                continue;
-            }
-            for (RetryMsg retryMsg : retryMsgList) {
-                retryMsg.setState(STATE_SUCCESS);
-                boolean success = retryMsgService.updateForId(retryMsg);
-                log.debug("updateForId success = {}", success);
-            }
+    public void ackSuccessRetryMsgList(Msg msg) {
+        long offset = msg.getOffset();
+        String topic = msg.getRealTopic();
+        if (isGeneralTopic(topic)) {
+            return;
+        }
+        List<RetryMsg> retryMsgList = retryMsgMapper.selectList(new LambdaQueryWrapper<RetryMsg>()
+                .eq(RetryMsg::getOffset, offset)
+                .eq(RetryMsg::getRetryTopicName, topic));
+        if (retryMsgList == null) {
+            log.warn("retryMsg is null {} {}", topic, offset);
+            return;
+        }
+        for (RetryMsg retryMsg : retryMsgList) {
+            retryMsg.setState(STATE_SUCCESS);
+            boolean success = retryMsgService.updateForId(retryMsg);
+            log.debug("updateForId success = {}", success);
         }
     }
 
     /**
      * 普通 topic;
      */
-    public boolean isGeneralTopic(String topic) {
+    public static boolean isGeneralTopic(String topic) {
         return !topic.contains(RETRY_TOPIC_KEY_WORD);
     }
 

@@ -22,6 +22,9 @@ public class TopicGroupLog extends BaseDO {
     public static final int STATE_START = 1;
     public static final int STATE_DONE = 2;
     public static final int STATE_RETRY = 3;
+    public static final int STATE_EMPTY = 4;
+    // pull 时没找到消息, 需要重试, 但又不是真正的重试, 通常是并发导致的空隙消息
+    public static final int STATE_NOT_FOUND_WITH_RETRY = 5;
 
     String topicName;
 

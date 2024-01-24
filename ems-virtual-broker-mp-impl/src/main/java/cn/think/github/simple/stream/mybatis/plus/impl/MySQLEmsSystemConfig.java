@@ -41,7 +41,7 @@ public class MySQLEmsSystemConfig {
         SimpleStreamSystemConfig systemConfig = mapper.selectOne(new LambdaQueryWrapper<SimpleStreamSystemConfig>()
                 .eq(SimpleStreamSystemConfig::getSimpleKey, "consumerBatchSize")
                 .eq(SimpleStreamSystemConfig::getDeleted, DELETED_EXIST));
-        return systemConfig == null ? 10 : Integer.parseInt(systemConfig.getSimpleValue());
+        return systemConfig == null ? 1 : Integer.parseInt(systemConfig.getSimpleValue());
     }
 
     public int consumerInitThreads() {
@@ -56,5 +56,12 @@ public class MySQLEmsSystemConfig {
                 .eq(SimpleStreamSystemConfig::getSimpleKey, "consumerRetryMaxTimes")
                 .eq(SimpleStreamSystemConfig::getDeleted, DELETED_EXIST));
         return systemConfig == null ? 16 : Integer.parseInt(systemConfig.getSimpleValue());
+    }
+
+    public int emsBrokerPullMaxWaitTimes() {
+        SimpleStreamSystemConfig systemConfig = mapper.selectOne(new LambdaQueryWrapper<SimpleStreamSystemConfig>()
+                .eq(SimpleStreamSystemConfig::getSimpleKey, "emsBrokerPullMaxWaitTimes")
+                .eq(SimpleStreamSystemConfig::getDeleted, DELETED_EXIST));
+        return systemConfig == null ? 10 : Integer.parseInt(systemConfig.getSimpleValue());
     }
 }

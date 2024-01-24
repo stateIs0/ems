@@ -3,10 +3,6 @@ package cn.think.github.simple.stream.mybatis.plus.impl.repository.mapper;
 import cn.think.github.simple.stream.mybatis.plus.impl.repository.dao.TopicGroupLog;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
-
-import java.util.List;
 
 /**
  * @version 1.0

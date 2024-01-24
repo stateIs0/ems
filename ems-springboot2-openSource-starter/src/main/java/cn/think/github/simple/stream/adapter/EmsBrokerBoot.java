@@ -9,6 +9,7 @@ import com.alibaba.druid.pool.DruidDataSource;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.annotation.MapperScan;
 import org.quartz.Scheduler;
@@ -28,7 +29,10 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.annotation.Resource;
 import javax.sql.DataSource;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 
 /**
  * @version 1.0
@@ -36,6 +40,7 @@ import java.io.IOException;
  * @Description
  * @date 2023/10/17
  **/
+@Slf4j
 @Configuration
 // 开关, 默认关闭
 @ConditionalOnProperty(name = "ems.enabled", havingValue = "true", matchIfMissing = false)

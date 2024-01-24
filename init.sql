@@ -214,6 +214,7 @@ create table ems.ems_simple_group
     create_time datetime     default CURRENT_TIMESTAMP not null,
     update_time datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
     deleted     tinyint      default 0                 not null,
+    last_offset varchar(254)                           null,
     primary key (id, topic_name, group_name),
     constraint u_id
         unique (topic_name, group_name)
@@ -256,6 +257,7 @@ create table ems.ems_simple_topic
     topic_name  varchar(255)                       not null,
     rule        int      default 1                 not null comment '1 可读可写，2 写，3 读，4 禁止读写',
     type        int      default 1                 not null,
+    last_offset varchar(254)                       null,
     create_time datetime default CURRENT_TIMESTAMP not null,
     update_time datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
     deleted     tinyint  default 0                 not null,
@@ -278,9 +280,6 @@ create table ems.ems_topic_group_log
     update_time    datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
     deleted        tinyint  default 0                 not null
 );
-
-create index ems_topic_group_log_state_index
-    on ems.ems_topic_group_log (state);
 
 create index topic_group_log__index_client_id
     on ems.ems_topic_group_log (client_id);

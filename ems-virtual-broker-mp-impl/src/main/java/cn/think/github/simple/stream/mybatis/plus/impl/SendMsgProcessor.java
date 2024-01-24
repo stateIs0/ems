@@ -21,8 +21,12 @@ public class SendMsgProcessor {
     private MsgService msgService;
 
     public String send(Msg msg, int timeoutInSec) {
-        String insert = msgService.insert(msg, timeoutInSec);
-        log.debug("send msg {} {}", msg.getTopic(), insert);
-        return insert;
+        return doSend(msg, timeoutInSec);
+    }
+
+    private String doSend(Msg msg, int timeoutInSec) {
+        String msgId = msgService.insert(msg, timeoutInSec);
+        log.debug("send msg {} {}", msg.getTopic(), msgId);
+        return msgId;
     }
 }

@@ -17,4 +17,6 @@ public interface EmsSystemConfig {
     int consumerThreads();
 
     int consumerRetryMaxTimes();
+
+    int emsBrokerPullMaxWaitTimes();
 }
